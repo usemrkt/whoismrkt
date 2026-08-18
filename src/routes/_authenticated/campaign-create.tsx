@@ -939,6 +939,27 @@ function CampaignCreatePage() {
     });
   }, [user]);
 
+  // Campaign Center hand-off: an AI-recommended campaign idea pre-fills the
+  // title/description/goal here instead of opening on a blank form — same
+  // localStorage-draft pattern already used for the AI Strategist prefill
+  // (see mrkt_prefill_prompt in chat.tsx / growth.tsx).
+  useEffect(() => {
+    const raw = localStorage.getItem("mrkt_campaign_draft");
+    if (!raw) return;
+    localStorage.removeItem("mrkt_campaign_draft");
+    try {
+      const draft = JSON.parse(raw) as Partial<Pick<CampaignFormData, "title" | "description" | "campaign_goal">>;
+      setData((d) => ({
+        ...d,
+        title:         draft.title ?? d.title,
+        description:   draft.description ?? d.description,
+        campaign_goal: draft.campaign_goal ?? d.campaign_goal,
+      }));
+    } catch {
+      // Malformed draft — ignore, user just gets the normal blank form.
+    }
+  }, []);
+
   function set<K extends keyof CampaignFormData>(k: K, v: CampaignFormData[K]) {
     setData((d) => ({ ...d, [k]: v }));
   }

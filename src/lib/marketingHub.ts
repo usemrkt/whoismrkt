@@ -45,12 +45,27 @@ export type Recommendation = {
 
 export type ActionCenterItem = { label: string; link: string };
 
+export type CampaignSummary = {
+  id: string;
+  title: string;
+  status: string; // draft | active | paused | closed | completed
+  deadline: string | null;
+  compensation_type: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  amount_fixed: number | null;
+  applications: { pending: number; reviewing: number; shortlisted: number; accepted: number; rejected: number };
+  contract_status: "none" | "awaiting_signature" | "signed";
+  next_action: string;
+};
+
 export interface MarketingHubCtxValue {
   loading: boolean;
   refreshing: boolean;
   error: string | null;
   briefing: Briefing | null;
   actionCenter: ActionCenterItem[];
+  campaigns: CampaignSummary[];
   recommendations: Recommendation[];
   generatedAt: string | null;
   cached: boolean;

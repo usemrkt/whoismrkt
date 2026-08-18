@@ -10,13 +10,13 @@
 
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { Compass, LayoutGrid, Users2, TrendingUp, RefreshCw, Loader2 } from "lucide-react";
+import { Compass, LayoutGrid, Users2, TrendingUp, Megaphone, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { C } from "@/lib/theme";
 import {
   MarketingHubCtx, timeAgo,
-  type Briefing, type ActionCenterItem, type Recommendation, type MarketingHubCtxValue,
+  type Briefing, type ActionCenterItem, type CampaignSummary, type Recommendation, type MarketingHubCtxValue,
 } from "@/lib/marketingHub";
 
 export const Route = createFileRoute("/_authenticated/marketing-hub")({
@@ -25,9 +25,10 @@ export const Route = createFileRoute("/_authenticated/marketing-hub")({
 });
 
 const NAV_ITEMS = [
-  { to: "/marketing-hub",        label: "Dashboard",      icon: LayoutGrid, exact: true },
-  { to: "/marketing-hub/team",   label: "Marketing Team", icon: Users2,     exact: false },
-  { to: "/marketing-hub/growth", label: "Growth",         icon: TrendingUp, exact: false },
+  { to: "/marketing-hub",          label: "Dashboard",       icon: LayoutGrid, exact: true },
+  { to: "/marketing-hub/team",     label: "Marketing Team",  icon: Users2,     exact: false },
+  { to: "/marketing-hub/campaigns",label: "Campaign Center", icon: Megaphone,  exact: false },
+  { to: "/marketing-hub/growth",   label: "Growth",          icon: TrendingUp, exact: false },
 ] as const;
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ function MarketingHubLayout() {
   const [error, setError]           = useState<string | null>(null);
   const [briefing, setBriefing]           = useState<Briefing | null>(null);
   const [actionCenter, setActionCenter]   = useState<ActionCenterItem[]>([]);
+  const [campaigns, setCampaigns]         = useState<CampaignSummary[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [generatedAt, setGeneratedAt]     = useState<string | null>(null);
   const [cached, setCached]               = useState(false);
@@ -70,6 +72,7 @@ function MarketingHubLayout() {
       if (fnErr) throw fnErr;
       setBriefing(data.briefing);
       setActionCenter(data.action_center ?? []);
+      setCampaigns(data.campaigns ?? []);
       setRecommendations(data.recommendations ?? []);
       setGeneratedAt(data.generated_at);
       setCached(!!data.cached);
@@ -100,7 +103,7 @@ function MarketingHubLayout() {
   }
 
   const ctxValue: MarketingHubCtxValue = {
-    loading, refreshing, error, briefing, actionCenter, recommendations, generatedAt, cached,
+    loading, refreshing, error, briefing, actionCenter, campaigns, recommendations, generatedAt, cached,
     refresh: load, dismiss, complete,
   };
 

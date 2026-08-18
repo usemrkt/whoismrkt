@@ -21,9 +21,15 @@
 // second edge function: the client reads/updates ai_recommendations directly
 // via its existing owner RLS policy.
 //
+// Also returns `campaigns` — real per-campaign summaries (status, budget,
+// application counts, contract status, a deterministic "next best action")
+// for the Campaign Center section. Like action_center, this is always fresh
+// and deterministic — never part of the cached AI `briefing` blob, and costs
+// no extra AI call (pure reshaping of data already fetched below).
+//
 // POST /functions/v1/marketing-hub-briefing
 // Body: { force_refresh?: boolean }
-// Returns: { briefing, action_center, recommendations, generated_at, cached }
+// Returns: { briefing, action_center, campaigns, recommendations, generated_at, cached }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -108,12 +114,12 @@ Deno.serve(async (req: Request) => {
       { data: upcomingContent },
     ] = await Promise.all([
       serviceClient.from("campaigns")
-        .select("id, title, status, is_published, compensation_budget_min, compensation_budget_max, deadline, created_at")
+        .select("id, title, status, is_published, compensation_type, compensation_amount_fixed, compensation_budget_min, compensation_budget_max, deadline, created_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
       serviceClient.from("brand_knowledge").select("*").eq("business_user_id", user.id).maybeSingle(),
       serviceClient.from("business_intelligence").select("*").eq("user_id", user.id).maybeSingle(),
       serviceClient.from("contracts")
-        .select("id, status, campaign_title, sent_at, accepted_at").eq("business_id", user.id)
+        .select("id, campaign_id, status, campaign_title, sent_at, accepted_at").eq("business_id", user.id)
         .order("created_at", { ascending: false }).limit(50),
       serviceClient.from("campaign_deliverable_submissions")
         .select("id, status, submitted_at").eq("business_id", user.id).limit(200),
@@ -131,6 +137,7 @@ Deno.serve(async (req: Request) => {
     ]);
 
     let applicationCounts: Record<string, number> = {};
+    const perCampaignApps: Record<string, Record<string, number>> = {};
     const campaignIds = (campaigns ?? []).map((c) => c.id);
     if (campaignIds.length > 0) {
       const { data: apps } = await serviceClient
@@ -139,7 +146,53 @@ Deno.serve(async (req: Request) => {
         acc[a.status] = (acc[a.status] ?? 0) + 1;
         return acc;
       }, {});
+      for (const a of apps ?? []) {
+        (perCampaignApps[a.campaign_id] ??= {})[a.status] = (perCampaignApps[a.campaign_id]?.[a.status] ?? 0) + 1;
+      }
     }
+
+    // Per-campaign contract status — real signal, no fabrication: a campaign
+    // has a contract sent-but-unsigned, one accepted, or none at all.
+    const perCampaignContractStatus: Record<string, "awaiting_signature" | "signed"> = {};
+    for (const c of contracts ?? []) {
+      if (!c.campaign_id) continue;
+      if (c.status === "accepted") perCampaignContractStatus[c.campaign_id] = "signed";
+      else if (c.status === "sent" && perCampaignContractStatus[c.campaign_id] !== "signed") perCampaignContractStatus[c.campaign_id] = "awaiting_signature";
+    }
+
+    // Deterministic per-campaign "next best action" — no AI call, just the
+    // same kind of real-count logic action_center already uses.
+    function nextActionFor(campaignId: string, deadline: string | null, status: string): string {
+      const a = perCampaignApps[campaignId] ?? {};
+      const pending = a["pending"] ?? 0;
+      if (pending > 0) return `${pending} applicant${pending === 1 ? "" : "s"} awaiting review`;
+      if (perCampaignContractStatus[campaignId] === "awaiting_signature") return "Contract sent — awaiting signature";
+      const daysLeft = deadline ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000) : null;
+      if (status === "active" && daysLeft !== null && daysLeft <= 3 && daysLeft >= 0) return `Deadline in ${daysLeft} day${daysLeft === 1 ? "" : "s"} — consider promoting`;
+      if (status === "active" && Object.keys(a).length === 0) return "No applicants yet — check visibility";
+      if (status === "draft") return "Not yet published";
+      return "On track — no action needed";
+    }
+
+    const campaignSummaries = (campaigns ?? []).map((c) => ({
+      id: c.id,
+      title: c.title,
+      status: c.status,
+      deadline: c.deadline,
+      compensation_type: c.compensation_type,
+      budget_min: c.compensation_budget_min,
+      budget_max: c.compensation_budget_max,
+      amount_fixed: c.compensation_amount_fixed,
+      applications: {
+        pending:     perCampaignApps[c.id]?.["pending"] ?? 0,
+        reviewing:   perCampaignApps[c.id]?.["reviewing"] ?? 0,
+        shortlisted: perCampaignApps[c.id]?.["shortlisted"] ?? 0,
+        accepted:    perCampaignApps[c.id]?.["accepted"] ?? 0,
+        rejected:    perCampaignApps[c.id]?.["rejected"] ?? 0,
+      },
+      contract_status: perCampaignContractStatus[c.id] ?? "none",
+      next_action: nextActionFor(c.id, c.deadline, c.status),
+    }));
 
     const activeCampaigns    = (campaigns ?? []).filter((c) => c.status === "active");
     const pendingApplications = applicationCounts["pending"] ?? 0;
@@ -184,7 +237,7 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", user.id).eq("period_start", periodStart).maybeSingle();
       if (cached) {
         const recommendations = await fetchRecommendations();
-        return jsonOk({ briefing: cached.briefing, action_center: actionCenter, recommendations, generated_at: cached.generated_at, cached: true }, req);
+        return jsonOk({ briefing: cached.briefing, action_center: actionCenter, campaigns: campaignSummaries, recommendations, generated_at: cached.generated_at, cached: true }, req);
       }
     }
 
@@ -307,7 +360,7 @@ Every "why" must cite a specific fact above. Every department block must also ci
 
     const recommendations = await fetchRecommendations();
 
-    return jsonOk({ briefing, action_center: actionCenter, recommendations, generated_at: generatedAt, cached: false }, req);
+    return jsonOk({ briefing, action_center: actionCenter, campaigns: campaignSummaries, recommendations, generated_at: generatedAt, cached: false }, req);
 
   } catch (err) {
     console.error("marketing-hub-briefing error:", err);

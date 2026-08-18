@@ -74,6 +74,7 @@ import { Route as AuthenticatedProfileEditRouteImport } from './routes/_authenti
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages.$conversationId'
 import { Route as AuthenticatedMarketingHubTeamRouteImport } from './routes/_authenticated/marketing-hub.team'
 import { Route as AuthenticatedMarketingHubGrowthRouteImport } from './routes/_authenticated/marketing-hub.growth'
+import { Route as AuthenticatedMarketingHubCampaignsRouteImport } from './routes/_authenticated/marketing-hub.campaigns'
 import { Route as AuthenticatedDeliverablesApplicationIdRouteImport } from './routes/_authenticated/deliverables.$applicationId'
 import { Route as AuthenticatedCampaignsCampaignIdRouteImport } from './routes/_authenticated/campaigns.$campaignId'
 import { Route as AuthenticatedCampaignsCampaignIdIndexRouteImport } from './routes/_authenticated/campaigns.$campaignId.index'
@@ -426,6 +427,12 @@ const AuthenticatedMarketingHubGrowthRoute =
     path: '/growth',
     getParentRoute: () => AuthenticatedMarketingHubRoute,
   } as any)
+const AuthenticatedMarketingHubCampaignsRoute =
+  AuthenticatedMarketingHubCampaignsRouteImport.update({
+    id: '/campaigns',
+    path: '/campaigns',
+    getParentRoute: () => AuthenticatedMarketingHubRoute,
+  } as any)
 const AuthenticatedDeliverablesApplicationIdRoute =
   AuthenticatedDeliverablesApplicationIdRouteImport.update({
     id: '/deliverables/$applicationId',
@@ -518,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/creators/$creatorId': typeof CreatorsCreatorIdRoute
   '/k/$username': typeof KUsernameRoute
   '/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/marketing-hub/campaigns': typeof AuthenticatedMarketingHubCampaignsRoute
   '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
@@ -585,6 +593,7 @@ export interface FileRoutesByTo {
   '/creators/$creatorId': typeof CreatorsCreatorIdRoute
   '/k/$username': typeof KUsernameRoute
   '/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/marketing-hub/campaigns': typeof AuthenticatedMarketingHubCampaignsRoute
   '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
@@ -658,6 +667,7 @@ export interface FileRoutesById {
   '/k/$username': typeof KUsernameRoute
   '/_authenticated/campaigns/$campaignId': typeof AuthenticatedCampaignsCampaignIdRouteWithChildren
   '/_authenticated/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/_authenticated/marketing-hub/campaigns': typeof AuthenticatedMarketingHubCampaignsRoute
   '/_authenticated/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/_authenticated/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
@@ -731,6 +741,7 @@ export interface FileRouteTypes {
     | '/creators/$creatorId'
     | '/k/$username'
     | '/deliverables/$applicationId'
+    | '/marketing-hub/campaigns'
     | '/marketing-hub/growth'
     | '/marketing-hub/team'
     | '/messages/$conversationId'
@@ -798,6 +809,7 @@ export interface FileRouteTypes {
     | '/creators/$creatorId'
     | '/k/$username'
     | '/deliverables/$applicationId'
+    | '/marketing-hub/campaigns'
     | '/marketing-hub/growth'
     | '/marketing-hub/team'
     | '/messages/$conversationId'
@@ -870,6 +882,7 @@ export interface FileRouteTypes {
     | '/k/$username'
     | '/_authenticated/campaigns/$campaignId'
     | '/_authenticated/deliverables/$applicationId'
+    | '/_authenticated/marketing-hub/campaigns'
     | '/_authenticated/marketing-hub/growth'
     | '/_authenticated/marketing-hub/team'
     | '/_authenticated/messages/$conversationId'
@@ -1375,6 +1388,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMarketingHubGrowthRouteImport
       parentRoute: typeof AuthenticatedMarketingHubRoute
     }
+    '/_authenticated/marketing-hub/campaigns': {
+      id: '/_authenticated/marketing-hub/campaigns'
+      path: '/campaigns'
+      fullPath: '/marketing-hub/campaigns'
+      preLoaderRoute: typeof AuthenticatedMarketingHubCampaignsRouteImport
+      parentRoute: typeof AuthenticatedMarketingHubRoute
+    }
     '/_authenticated/deliverables/$applicationId': {
       id: '/_authenticated/deliverables/$applicationId'
       path: '/deliverables/$applicationId'
@@ -1421,6 +1441,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedMarketingHubRouteChildren {
+  AuthenticatedMarketingHubCampaignsRoute: typeof AuthenticatedMarketingHubCampaignsRoute
   AuthenticatedMarketingHubGrowthRoute: typeof AuthenticatedMarketingHubGrowthRoute
   AuthenticatedMarketingHubTeamRoute: typeof AuthenticatedMarketingHubTeamRoute
   AuthenticatedMarketingHubIndexRoute: typeof AuthenticatedMarketingHubIndexRoute
@@ -1428,6 +1449,8 @@ interface AuthenticatedMarketingHubRouteChildren {
 
 const AuthenticatedMarketingHubRouteChildren: AuthenticatedMarketingHubRouteChildren =
   {
+    AuthenticatedMarketingHubCampaignsRoute:
+      AuthenticatedMarketingHubCampaignsRoute,
     AuthenticatedMarketingHubGrowthRoute: AuthenticatedMarketingHubGrowthRoute,
     AuthenticatedMarketingHubTeamRoute: AuthenticatedMarketingHubTeamRoute,
     AuthenticatedMarketingHubIndexRoute: AuthenticatedMarketingHubIndexRoute,
