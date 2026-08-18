@@ -45,6 +45,7 @@ export const CREDIT_COST = {
   profile_audit:        10,
   visibility_report:    10,
   growth_strategy:      10,
+  marketing_hub_briefing: 10, // Marketing Hub daily briefing — same depth as growth_strategy
   // Asset generation
   asset_generation:     15, // AI asset composition — ~$0.05
   image_creation:       15, // image gen (Flux/DALL-E) — ~$0.04

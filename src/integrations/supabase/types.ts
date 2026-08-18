@@ -427,10 +427,15 @@ export type Database = {
           business_user_id: string
           competitors: string | null
           content_pillars: string | null
+          current_marketing_challenges: string | null
+          current_social_channels: string | null
           id: string
           links: Json
+          marketing_budget_range: string | null
           marketing_goals: string | null
+          preferred_growth_channels: string | null
           products: string | null
+          revenue_range: string | null
           services: string | null
           target_audience: string | null
           updated_at: string
@@ -442,10 +447,15 @@ export type Database = {
           business_user_id: string
           competitors?: string | null
           content_pillars?: string | null
+          current_marketing_challenges?: string | null
+          current_social_channels?: string | null
           id?: string
           links?: Json
+          marketing_budget_range?: string | null
           marketing_goals?: string | null
+          preferred_growth_channels?: string | null
           products?: string | null
+          revenue_range?: string | null
           services?: string | null
           target_audience?: string | null
           updated_at?: string
@@ -457,10 +467,15 @@ export type Database = {
           business_user_id?: string
           competitors?: string | null
           content_pillars?: string | null
+          current_marketing_challenges?: string | null
+          current_social_channels?: string | null
           id?: string
           links?: Json
+          marketing_budget_range?: string | null
           marketing_goals?: string | null
+          preferred_growth_channels?: string | null
           products?: string | null
+          revenue_range?: string | null
           services?: string | null
           target_audience?: string | null
           updated_at?: string
@@ -2266,6 +2281,36 @@ export type Database = {
           message?: string
           name?: string
           source?: string | null
+        }
+        Relationships: []
+      }
+      marketing_hub_briefings: {
+        Row: {
+          briefing: Json
+          generated_at: string
+          id: string
+          model: string | null
+          period_start: string
+          provider: string | null
+          user_id: string
+        }
+        Insert: {
+          briefing?: Json
+          generated_at?: string
+          id?: string
+          model?: string | null
+          period_start: string
+          provider?: string | null
+          user_id: string
+        }
+        Update: {
+          briefing?: Json
+          generated_at?: string
+          id?: string
+          model?: string | null
+          period_start?: string
+          provider?: string | null
+          user_id?: string
         }
         Relationships: []
       }

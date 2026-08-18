@@ -47,6 +47,7 @@ import { Route as AuthenticatedOpportunitiesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedMatchesRouteImport } from './routes/_authenticated/matches'
+import { Route as AuthenticatedMarketingHubRouteImport } from './routes/_authenticated/marketing-hub'
 import { Route as AuthenticatedInstagramCallbackRouteImport } from './routes/_authenticated/instagram-callback'
 import { Route as AuthenticatedHomeRouteImport } from './routes/_authenticated/home'
 import { Route as AuthenticatedGrowthRouteImport } from './routes/_authenticated/growth'
@@ -269,6 +270,12 @@ const AuthenticatedMatchesRoute = AuthenticatedMatchesRouteImport.update({
   path: '/matches',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedMarketingHubRoute =
+  AuthenticatedMarketingHubRouteImport.update({
+    id: '/marketing-hub',
+    path: '/marketing-hub',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedInstagramCallbackRoute =
   AuthenticatedInstagramCallbackRouteImport.update({
     id: '/instagram-callback',
@@ -471,6 +478,7 @@ export interface FileRoutesByFullPath {
   '/growth': typeof AuthenticatedGrowthRoute
   '/home': typeof AuthenticatedHomeRoute
   '/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
+  '/marketing-hub': typeof AuthenticatedMarketingHubRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -538,6 +546,7 @@ export interface FileRoutesByTo {
   '/growth': typeof AuthenticatedGrowthRoute
   '/home': typeof AuthenticatedHomeRoute
   '/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
+  '/marketing-hub': typeof AuthenticatedMarketingHubRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/opportunities': typeof AuthenticatedOpportunitiesRoute
@@ -603,6 +612,7 @@ export interface FileRoutesById {
   '/_authenticated/growth': typeof AuthenticatedGrowthRoute
   '/_authenticated/home': typeof AuthenticatedHomeRoute
   '/_authenticated/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
+  '/_authenticated/marketing-hub': typeof AuthenticatedMarketingHubRoute
   '/_authenticated/matches': typeof AuthenticatedMatchesRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -673,6 +683,7 @@ export interface FileRouteTypes {
     | '/growth'
     | '/home'
     | '/instagram-callback'
+    | '/marketing-hub'
     | '/matches'
     | '/messages'
     | '/notifications'
@@ -740,6 +751,7 @@ export interface FileRouteTypes {
     | '/growth'
     | '/home'
     | '/instagram-callback'
+    | '/marketing-hub'
     | '/matches'
     | '/notifications'
     | '/opportunities'
@@ -804,6 +816,7 @@ export interface FileRouteTypes {
     | '/_authenticated/growth'
     | '/_authenticated/home'
     | '/_authenticated/instagram-callback'
+    | '/_authenticated/marketing-hub'
     | '/_authenticated/matches'
     | '/_authenticated/messages'
     | '/_authenticated/notifications'
@@ -1136,6 +1149,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMatchesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/marketing-hub': {
+      id: '/_authenticated/marketing-hub'
+      path: '/marketing-hub'
+      fullPath: '/marketing-hub'
+      preLoaderRoute: typeof AuthenticatedMarketingHubRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/instagram-callback': {
       id: '/_authenticated/instagram-callback'
       path: '/instagram-callback'
@@ -1426,6 +1446,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedGrowthRoute: typeof AuthenticatedGrowthRoute
   AuthenticatedHomeRoute: typeof AuthenticatedHomeRoute
   AuthenticatedInstagramCallbackRoute: typeof AuthenticatedInstagramCallbackRoute
+  AuthenticatedMarketingHubRoute: typeof AuthenticatedMarketingHubRoute
   AuthenticatedMatchesRoute: typeof AuthenticatedMatchesRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
@@ -1458,6 +1479,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedGrowthRoute: AuthenticatedGrowthRoute,
   AuthenticatedHomeRoute: AuthenticatedHomeRoute,
   AuthenticatedInstagramCallbackRoute: AuthenticatedInstagramCallbackRoute,
+  AuthenticatedMarketingHubRoute: AuthenticatedMarketingHubRoute,
   AuthenticatedMatchesRoute: AuthenticatedMatchesRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,

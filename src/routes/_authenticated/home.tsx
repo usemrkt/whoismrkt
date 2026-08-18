@@ -6,7 +6,7 @@ import {
   Zap, Eye, MessageSquare, TrendingUp, CalendarDays,
   Megaphone, Users, DollarSign, ArrowRight, ChevronRight,
   Sparkles, ArrowUpRight, Loader2, Clock, ClipboardList, Bookmark,
-  Target, CheckCircle2, Circle, X, BarChart2, RotateCcw,
+  Target, CheckCircle2, Circle, X, BarChart2, RotateCcw, Compass,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -1106,13 +1106,14 @@ function BusinessActivityFeed({ items }: { items: ActivityItem[] }) {
   );
 }
 
-function BusinessHome({ data, aiInsights, aiInsightsLoading, onOpenReport, completedMissionIds, onMissionComplete }: {
+function BusinessHome({ data, aiInsights, aiInsightsLoading, onOpenReport, completedMissionIds, onMissionComplete, marketingHubBrief }: {
   data:                 BusinessData;
   aiInsights:           Array<{ text: string; link: string }> | null;
   aiInsightsLoading:    boolean;
   onOpenReport:         () => void;
   completedMissionIds:  Set<string>;
   onMissionComplete:    (id: string) => void;
+  marketingHubBrief:    MarketingHubTeaser | null;
 }) {
   const { t } = useI18n();
   const sentence = data.pendingApps > 0
@@ -1339,6 +1340,32 @@ function BusinessHome({ data, aiInsights, aiInsightsLoading, onOpenReport, compl
             </div>
             <IntelligencePanel items={businessInsights} loading={aiInsightsLoading} />
           </Card>
+
+          {/* From your Marketing Hub — reads the cache only, omitted if empty */}
+          {marketingHubBrief?.health && (
+            <Card>
+              <Link to="/marketing-hub" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, textDecoration: "none" }}>
+                <Compass size={14} style={{ color: C.accent }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: C.textPrimary, letterSpacing: "-0.015em" }}>
+                  From your Marketing Hub
+                </span>
+              </Link>
+              <div style={{ fontSize: 12, color: C.textTertiary, marginBottom: 12 }}>
+                Health score: {marketingHubBrief.health.score}/100
+              </div>
+              <div style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.55, marginBottom: marketingHubBrief.weekly_priorities?.[0] ? 10 : 0 }}>
+                {marketingHubBrief.health.summary}
+              </div>
+              {marketingHubBrief.weekly_priorities?.[0] && (
+                <div style={{ fontSize: 12.5, color: C.textTertiary, marginBottom: 12 }}>
+                  Top priority: <span style={{ color: C.textSecondary }}>{marketingHubBrief.weekly_priorities[0].title}</span>
+                </div>
+              )}
+              <Link to="/marketing-hub" style={{ fontSize: 12.5, fontWeight: 600, color: C.aiBlue, textDecoration: "none" }}>
+                Open Marketing Hub →
+              </Link>
+            </Card>
+          )}
         </div>
 
       </div>
@@ -2055,12 +2082,20 @@ function LoadingSkeleton() {
 
 type InsightItem = { text: string; link: string };
 
+// Cached Marketing Hub briefing, read directly from marketing_hub_briefings —
+// never triggers generation from the dashboard (see /marketing-hub for that).
+type MarketingHubTeaser = {
+  health?: { score: number; summary: string };
+  weekly_priorities?: Array<{ title: string }>;
+};
+
 function HomePage() {
   const { user } = useAuth();
   const [businessData,        setBusinessData]        = useState<BusinessData | null>(null);
   const [creatorData,         setCreatorData]          = useState<CreatorData | null>(null);
   const [loading,             setLoading]              = useState(true);
   const [isBusiness,          setIsBusiness]           = useState(false);
+  const [marketingHubBrief,   setMarketingHubBrief]    = useState<MarketingHubTeaser | null>(null);
   const [aiInsights,          setAiInsights]           = useState<InsightItem[] | null>(null);
   const [aiInsightsLoading,   setAiInsightsLoading]    = useState(false);
   const [weeklyReportOpen,    setWeeklyReportOpen]     = useState(false);
@@ -2149,6 +2184,19 @@ function HomePage() {
       );
       setIsBusiness(roleIsBusiness);
       roleRef.current = roleIsBusiness ? "business" : "creator";
+
+      // Marketing Hub teaser — reads the cache only, never triggers generation.
+      if (roleIsBusiness) {
+        db.from("marketing_hub_briefings")
+          .select("briefing")
+          .eq("user_id", uid)
+          .order("period_start", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.briefing) setMarketingHubBrief(data.briefing as MarketingHubTeaser);
+          });
+      }
 
       // ── Load today's mission completions + log session start (once per day) ──
       const todayStart = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
@@ -2713,6 +2761,7 @@ function HomePage() {
           onOpenReport={openReport}
           completedMissionIds={completedMissionIds}
           onMissionComplete={markMissionComplete}
+          marketingHubBrief={marketingHubBrief}
         />
       )}
       {!isBusiness && creatorData && (

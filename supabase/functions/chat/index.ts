@@ -62,7 +62,24 @@ interface BrandKnowledge {
   content_pillars: string | null;
   marketing_goals: string | null;
   brand_guidelines: string | null;
+  // Marketing Hub fields (20260818000000_marketing_hub.sql)
+  revenue_range: string | null;
+  marketing_budget_range: string | null;
+  current_marketing_challenges: string | null;
+  preferred_growth_channels: string | null;
+  current_social_channels: string | null;
   links: BrandLink[] | null;
+}
+
+// ── Marketing Hub briefing summary (fed into business system prompts) ────────
+
+interface MarketingHubSummary {
+  briefing: {
+    health?: { score: number; summary: string };
+    weekly_priorities?: Array<{ title: string }>;
+    opportunities?: Array<{ title: string }>;
+  } | null;
+  generated_at: string;
 }
 
 // ── Per-campaign applicant detail ─────────────────────────────────────────────
@@ -226,12 +243,34 @@ function buildBrandKnowledgeBlock(bk: BrandKnowledge | null): string {
   if (bk.marketing_goals?.trim())    parts.push(`Marketing Goals: ${bk.marketing_goals.trim()}`);
   if (bk.brand_guidelines?.trim())   parts.push(`Brand Guidelines: ${bk.brand_guidelines.trim()}`);
   if (bk.links?.length)              parts.push(`Links: ${bk.links.map(l => `${l.label} — ${l.url}`).join(" | ")}`);
+  if (bk.revenue_range?.trim())      parts.push(`Revenue Range: ${bk.revenue_range.trim()}`);
+  if (bk.marketing_budget_range?.trim()) parts.push(`Marketing Budget: ${bk.marketing_budget_range.trim()}`);
+  if (bk.current_marketing_challenges?.trim()) parts.push(`Current Challenges: ${bk.current_marketing_challenges.trim()}`);
+  if (bk.preferred_growth_channels?.trim())    parts.push(`Preferred Growth Channels: ${bk.preferred_growth_channels.trim()}`);
+  if (bk.current_social_channels?.trim())      parts.push(`Social Channels: ${bk.current_social_channels.trim()}`);
   if (parts.length === 0) return "";
   return `\nBRAND KNOWLEDGE (pre-loaded — never ask them to repeat any of this):\n${parts.map(p => `- ${p}`).join("\n")}`;
 }
 
+function buildMarketingHubBlock(mh: MarketingHubSummary | null): string {
+  if (!mh?.briefing?.health) return "";
+  const lines: string[] = [`Business health score: ${mh.briefing.health.score}/100 — ${mh.briefing.health.summary}`];
+  const topPriority    = mh.briefing.weekly_priorities?.[0]?.title;
+  const topOpportunity = mh.briefing.opportunities?.[0]?.title;
+  if (topPriority)    lines.push(`Top Marketing Hub priority: ${topPriority}`);
+  if (topOpportunity) lines.push(`Top Marketing Hub opportunity: ${topOpportunity}`);
+  return `\nMARKETING HUB BRIEFING (from ${mh.generated_at.slice(0, 10)} — reference this when relevant, e.g. "your Marketing Hub flagged..."):\n${lines.map(l => `- ${l}`).join("\n")}`;
+}
+
 function buildBusinessContextBlock(ctx: BusinessContext | null): string {
-  if (!ctx || ctx.totalCampaigns === 0) return "";
+  // Explicit zero-state rather than silence — an empty string here left the
+  // model with no real campaign/pipeline data to ground itself on, and it was
+  // observed copying the illustrative example numbers from the mrkt-pipeline
+  // panel template (buildPanelProtocol) verbatim as if they were real data.
+  if (!ctx || ctx.totalCampaigns === 0) {
+    return `\nCAMPAIGN INTELLIGENCE (live data): This business has 0 campaigns and 0 pipeline entries on MRKT so far. ` +
+      `There is no real applicant, pipeline, or creator data to report. If asked about applicants or pipeline, say so plainly and suggest launching a first campaign — do NOT invent numbers or emit an mrkt-pipeline panel.`;
+  }
 
   const lines: string[] = [];
 
@@ -390,9 +429,9 @@ Opportunity list:
 [{"title":"Campaign Name","budget":"£2,500","platform":"Instagram, TikTok","status":"open","match":"High match"}]
 \`\`\`
 
-Pipeline breakdown:
+Pipeline breakdown (shape example only — the counts below are illustrative placeholders, NEVER copy them; use the real stage counts from CAMPAIGN INTELLIGENCE above, and omit this panel entirely if that data isn't present or shows 0 campaigns):
 \`\`\`mrkt-pipeline
-{"stages":[{"label":"Shortlisted","count":3},{"label":"Reviewing","count":4},{"label":"New","count":5}]}
+{"stages":[{"label":"Shortlisted","count":"<real count>"},{"label":"Reviewing","count":"<real count>"},{"label":"New","count":"<real count>"}]}
 \`\`\`
 
 Content calendar plan (when asked to build a plan, suggest posts, fill calendar, plan content):
@@ -410,6 +449,8 @@ CONTENT PLAN RULES (critical):
 
 GENERAL RULES:
 - Only include real data from context. Never fabricate names, numbers, or campaigns.
+- The example values shown above (names, counts, budgets) are shape templates only — never reuse them as if they were this business's real data.
+- If you don't have real data for a panel type, omit that panel rather than filling it with placeholder or estimated numbers.
 - Only ONE panel block per response.
 - Place the block after all your text.`;
 }
@@ -426,6 +467,7 @@ function buildSystemPrompt(
   businessCtx?: BusinessContext | null,
   creatorAppCtx?: CreatorAppCtx | null,
   contentPlannerCtx?: ContentPlannerCtx | null,
+  marketingHub?: MarketingHubSummary | null,
 ): string {
   const name =
     profile.name ||
@@ -535,6 +577,7 @@ ${format}${panelProtocol}`;
     const industry = profile.niche ?? "their industry";
     const bkBlock  = buildBrandKnowledgeBlock(brandKnowledge ?? null);
     const ctxBlock = buildBusinessContextBlock(businessCtx ?? null);
+    const mhBlock  = buildMarketingHubBlock(marketingHub ?? null);
 
     return `${preamble}
 
@@ -544,7 +587,7 @@ USER PROFILE:
 - Industry: ${industry}
 - Stage: ${stage}
 ${profile.goal ? `- Goal: ${profile.goal}` : ""}
-${profile.biggest_problem ? `- Current challenge: ${profile.biggest_problem}` : ""}${bkBlock}${ctxBlock}${contentBlock}
+${profile.biggest_problem ? `- Current challenge: ${profile.biggest_problem}` : ""}${bkBlock}${ctxBlock}${mhBlock}${contentBlock}
 
 YOUR JOB:
 Help ${name} build, brief, and run creator campaigns through MRKT Connect.
@@ -566,6 +609,7 @@ ${format}${panelProtocol}`;
     const industry = profile.niche ?? "their industry";
     const bkBlock  = buildBrandKnowledgeBlock(brandKnowledge ?? null);
     const ctxBlock = buildBusinessContextBlock(businessCtx ?? null);
+    const mhBlock  = buildMarketingHubBlock(marketingHub ?? null);
 
     return `${preamble}
 
@@ -575,7 +619,7 @@ USER PROFILE:
 - Industry: ${industry}
 - Stage: ${stage}
 ${profile.goal ? `- Goal: ${profile.goal}` : ""}
-${profile.biggest_problem ? `- Current challenge: ${profile.biggest_problem}` : ""}${bkBlock}${ctxBlock}${contentBlock}
+${profile.biggest_problem ? `- Current challenge: ${profile.biggest_problem}` : ""}${bkBlock}${ctxBlock}${mhBlock}${contentBlock}
 
 YOUR JOB:
 Help ${name} build their marketing strategy and execute on owned channels.
@@ -593,6 +637,7 @@ ${format}${panelProtocol}`;
   // ── Fallback ─────────────────────────────────────────────────────────────
   const bkBlock  = buildBrandKnowledgeBlock(brandKnowledge ?? null);
   const ctxBlock = buildBusinessContextBlock(businessCtx ?? null);
+  const mhBlock  = buildMarketingHubBlock(marketingHub ?? null);
 
   return `${preamble}
 
@@ -600,7 +645,7 @@ USER PROFILE:
 - Role: Marketing professional
 - Name: ${name}
 ${profile.niche ? `- Focus: ${profile.niche}` : ""}
-${profile.goal ? `- Goal: ${profile.goal}` : ""}${bkBlock}${ctxBlock}${contentBlock}
+${profile.goal ? `- Goal: ${profile.goal}` : ""}${bkBlock}${ctxBlock}${mhBlock}${contentBlock}
 
 YOUR JOB:
 Help ${name} with marketing strategy, content creation, and growth.
@@ -745,14 +790,15 @@ Deno.serve(async (req) => {
     let businessCtx: BusinessContext | null   = null;
     let creatorAppCtx: CreatorAppCtx | null   = null;
     let contentPlannerCtx: ContentPlannerCtx | null = null;
+    let marketingHub: MarketingHubSummary | null = null;
 
     if (!isCreator) {
       // ── Business context ──────────────────────────────────────────────────
 
-      const [bkRes, campaignRes, pipelineRes, plannerRes] = await Promise.all([
+      const [bkRes, campaignRes, pipelineRes, plannerRes, mhRes] = await Promise.all([
         serviceClient
           .from("brand_knowledge")
-          .select("brand_description,brand_voice,products,services,target_audience,competitors,content_pillars,marketing_goals,brand_guidelines,links")
+          .select("brand_description,brand_voice,products,services,target_audience,competitors,content_pillars,marketing_goals,brand_guidelines,revenue_range,marketing_budget_range,current_marketing_challenges,preferred_growth_channels,current_social_channels,links")
           .eq("business_user_id", userId)
           .maybeSingle(),
 
@@ -777,9 +823,20 @@ Deno.serve(async (req) => {
           .lte("scheduled_date", in28days)
           .order("scheduled_date", { ascending: true })
           .limit(30),
+
+        // Latest Marketing Hub briefing — omitted from the prompt entirely if
+        // the business has never opened /marketing-hub (see buildMarketingHubBlock).
+        serviceClient
+          .from("marketing_hub_briefings")
+          .select("briefing,generated_at")
+          .eq("user_id", userId)
+          .order("period_start", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       brandKnowledge = bkRes.data ?? null;
+      marketingHub   = mhRes.data as MarketingHubSummary | null;
 
       const campaignRows: Array<{ id: string; title: string; status: string }> =
         campaignRes.data ?? [];
@@ -943,7 +1000,7 @@ Deno.serve(async (req) => {
 
     // ── 3. Build system prompt ───────────────────────────────────────────────
     const systemPrompt = buildSystemPrompt(
-      profile, today, creatorProfile, brandKnowledge, businessCtx, creatorAppCtx, contentPlannerCtx
+      profile, today, creatorProfile, brandKnowledge, businessCtx, creatorAppCtx, contentPlannerCtx, marketingHub
     );
 
     // ── 4. Validate message payload ──────────────────────────────────────────

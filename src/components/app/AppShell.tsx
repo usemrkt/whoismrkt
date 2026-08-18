@@ -25,6 +25,7 @@ import {
   CheckCheck, UserPlus, Star, AlertCircle, ThumbsUp, ThumbsDown,
   ClipboardList, Bookmark, ShieldCheck, FileText, RotateCcw,
   Home, ChevronLeft, ChevronRight, Wand2, TrendingUp, MessageSquare, DollarSign,
+  Compass,
 } from "lucide-react";
 import { fetchUnreadCount } from "@/lib/messaging";
 import {
@@ -384,6 +385,7 @@ function MobileDrawer({
                 </NavSection>
                 <NavSection label="Intelligence">
                   <NavItem icon={Sparkles}      label="AI Strategist"  to="/chat"       exact variant="ai" onClick={onClose} />
+                  <NavItem icon={Compass}       label="Marketing Hub"  to="/marketing-hub"        onClick={onClose} />
                   <NavItem icon={Globe}         label="Globe"          to="/globe"                onClick={onClose} />
                 </NavSection>
               </>
@@ -838,6 +840,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </NavSection>
                 <NavSection label="Intelligence">
                   <NavItem icon={Sparkles}      label={t("nav.ai_strategist")}  to="/chat"      exact variant="ai" />
+                  <NavItem icon={Compass}       label="Marketing Hub"           to="/marketing-hub"       />
                   <NavItem icon={Globe}         label={t("nav.globe")}          to="/globe"               />
                 </NavSection>
               </>

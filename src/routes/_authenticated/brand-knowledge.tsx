@@ -10,6 +10,7 @@ import {
   Brain, Building2, Mic2, Package, Users, TrendingUp,
   Layers, Target, BookOpen, Link2, Plus, Trash2,
   CheckCircle2, Loader2, Sparkles, ExternalLink,
+  DollarSign, Wallet, AlertCircle, Rocket, Share2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
@@ -42,6 +43,14 @@ interface KnowledgeData {
   content_pillars: string;
   marketing_goals: string;
   brand_guidelines: string;
+  // Marketing Hub fields — feed the Marketing Hub's business-health/opportunity
+  // briefing and, like every other field on this page, are injected straight
+  // into the AI Strategist's system prompt automatically.
+  revenue_range: string;
+  marketing_budget_range: string;
+  current_marketing_challenges: string;
+  preferred_growth_channels: string;
+  current_social_channels: string;
   links: BrandLink[];
 }
 
@@ -55,6 +64,11 @@ const EMPTY: KnowledgeData = {
   content_pillars:   "",
   marketing_goals:   "",
   brand_guidelines:  "",
+  revenue_range:                 "",
+  marketing_budget_range:        "",
+  current_marketing_challenges:  "",
+  preferred_growth_channels:     "",
+  current_social_channels:       "",
   links:             [],
 };
 
@@ -151,6 +165,52 @@ const SECTIONS: TextSection[] = [
     hint:        "Visual and verbal rules. What to do, what to never do. The AI will respect these in every brief and output.",
     placeholder: "e.g. Colours: sage green (#8FAF8F) and off-white (#F7F4EF). Never use red or loud graphics. Fonts: Neue Haas Grotesk only. No filter presets — real skin always. UGC must show product in use, not just on shelf.",
     rows:        3,
+  },
+  // ── Marketing Hub additions ──────────────────────────────────────────────
+  {
+    type:        "text",
+    field:       "revenue_range",
+    label:       "Revenue Range",
+    icon:        DollarSign,
+    hint:        "Roughly what the business does in revenue. Helps the AI size recommendations appropriately — a $10K/mo shop and a $10M/yr brand need different advice.",
+    placeholder: "e.g. $50K–$100K/month, growing ~15% quarter over quarter.",
+    rows:        1,
+  },
+  {
+    type:        "text",
+    field:       "marketing_budget_range",
+    label:       "Marketing Budget",
+    icon:        Wallet,
+    hint:        "Total marketing spend across all channels — not just creator budget (that's set separately in onboarding). The AI uses this for realistic budget-allocation advice.",
+    placeholder: "e.g. ~$8K/month total: $3K paid social, $2K influencer/creator, $2K content production, $1K tools.",
+    rows:        2,
+  },
+  {
+    type:        "text",
+    field:       "current_marketing_challenges",
+    label:       "Current Challenges",
+    icon:        AlertCircle,
+    hint:        "What's actually not working right now. The AI prioritises the Marketing Hub's weekly priorities around these.",
+    placeholder: "e.g. Instagram growth has plateaued at 22K for 3 months. Paid ads CAC is up 40% this quarter. Struggling to find creators who match our aesthetic.",
+    rows:        2,
+  },
+  {
+    type:        "text",
+    field:       "preferred_growth_channels",
+    label:       "Growth Channels",
+    icon:        Rocket,
+    hint:        "Which channels you want to invest in or grow. The AI weighs opportunities toward these.",
+    placeholder: "e.g. Prioritising: Instagram Reels, creator partnerships, email. Not interested in: TikTok ads, print, events.",
+    rows:        2,
+  },
+  {
+    type:        "text",
+    field:       "current_social_channels",
+    label:       "Social Channels",
+    icon:        Share2,
+    hint:        "Your live handles, so the AI can reference your actual presence instead of asking for it.",
+    placeholder: "e.g. Instagram @brand (24K), TikTok @brand (8K), YouTube /brand (2K subs).",
+    rows:        2,
   },
 ];
 
@@ -474,6 +534,11 @@ function BrandKnowledgePage() {
           content_pillars:   row.content_pillars    ?? "",
           marketing_goals:   row.marketing_goals    ?? "",
           brand_guidelines:  row.brand_guidelines   ?? "",
+          revenue_range:                 row.revenue_range                 ?? "",
+          marketing_budget_range:        row.marketing_budget_range        ?? "",
+          current_marketing_challenges:  row.current_marketing_challenges  ?? "",
+          preferred_growth_channels:     row.preferred_growth_channels     ?? "",
+          current_social_channels:       row.current_social_channels       ?? "",
           links:             (row.links as unknown as BrandLink[] | null) ?? [],
         };
         setData(loaded);
@@ -503,6 +568,11 @@ function BrandKnowledgePage() {
         content_pillars:   d.content_pillars    || null,
         marketing_goals:   d.marketing_goals    || null,
         brand_guidelines:  d.brand_guidelines   || null,
+        revenue_range:                 d.revenue_range                || null,
+        marketing_budget_range:        d.marketing_budget_range       || null,
+        current_marketing_challenges:  d.current_marketing_challenges || null,
+        preferred_growth_channels:     d.preferred_growth_channels    || null,
+        current_social_channels:       d.current_social_channels      || null,
         links:             d.links as unknown as Json,
         updated_at:        new Date().toISOString(),
       };

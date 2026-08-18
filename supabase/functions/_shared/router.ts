@@ -104,6 +104,7 @@ export const ROUTES: Record<string, RouteConfig> = {
   market_analysis:       { primary: "anthropic",  tier: "deep",     fallback: "openai",    maxTokens: 4096, temperature: 0.50 },
   growth_strategy:       { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 3000, temperature: 0.65 },
   creator_matching:      { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 2000, temperature: 0.40 },
+  marketing_hub_briefing:{ primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 3000, temperature: 0.50 },
 
   // ── Higgsfield: Content generation — image, video, assets ────────────────
   image_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },

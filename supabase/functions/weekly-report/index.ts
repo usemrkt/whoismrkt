@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
         ai_observations:  cached.ai_insights,
         week_label:       weekLabel,
         cached:           true,
-      }), { headers: CORS });
+      }), { headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
     const weekAgo = monday.toISOString();
@@ -246,7 +246,7 @@ Deno.serve(async (req: Request) => {
       ai_observations: aiObservations,
       week_label:      weekLabel,
       cached:          false,
-    }), { headers: CORS });
+    }), { headers: { ...CORS, "Content-Type": "application/json" } });
 
   } catch (err: unknown) {
     if (err instanceof AuthError) {

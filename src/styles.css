@@ -1144,6 +1144,13 @@
 .growth-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 24px; }
 @media (min-width: 768px) { .growth-stats-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; } }
 
+/* ── Marketing Hub page ──────────────────────────────────────────────────── */
+.marketing-hub-page-inner { max-width: 1100px; margin: 0 auto; padding: 16px 16px 80px; }
+@media (min-width: 768px) { .marketing-hub-page-inner { padding: 24px 36px 48px; } }
+
+.marketing-hub-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 900px) { .marketing-hub-grid { grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; } }
+
 /* Growth profile-completion card: column on mobile, row on desktop */
 .growth-compl-card { display: flex; flex-direction: column; gap: 14px; }
 @media (min-width: 768px) {
