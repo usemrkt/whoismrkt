@@ -66,11 +66,14 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile.index'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages.index'
+import { Route as AuthenticatedMarketingHubIndexRouteImport } from './routes/_authenticated/marketing-hub.index'
 import { Route as AuthenticatedCampaignsIndexRouteImport } from './routes/_authenticated/campaigns.index'
 import { Route as BusinessProfileEditRouteImport } from './routes/business/profile.edit'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedProfileEditRouteImport } from './routes/_authenticated/profile.edit'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages.$conversationId'
+import { Route as AuthenticatedMarketingHubTeamRouteImport } from './routes/_authenticated/marketing-hub.team'
+import { Route as AuthenticatedMarketingHubGrowthRouteImport } from './routes/_authenticated/marketing-hub.growth'
 import { Route as AuthenticatedDeliverablesApplicationIdRouteImport } from './routes/_authenticated/deliverables.$applicationId'
 import { Route as AuthenticatedCampaignsCampaignIdRouteImport } from './routes/_authenticated/campaigns.$campaignId'
 import { Route as AuthenticatedCampaignsCampaignIdIndexRouteImport } from './routes/_authenticated/campaigns.$campaignId.index'
@@ -376,6 +379,12 @@ const AuthenticatedMessagesIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedMessagesRoute,
   } as any)
+const AuthenticatedMarketingHubIndexRoute =
+  AuthenticatedMarketingHubIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedMarketingHubRoute,
+  } as any)
 const AuthenticatedCampaignsIndexRoute =
   AuthenticatedCampaignsIndexRouteImport.update({
     id: '/campaigns/',
@@ -404,6 +413,18 @@ const AuthenticatedMessagesConversationIdRoute =
     id: '/$conversationId',
     path: '/$conversationId',
     getParentRoute: () => AuthenticatedMessagesRoute,
+  } as any)
+const AuthenticatedMarketingHubTeamRoute =
+  AuthenticatedMarketingHubTeamRouteImport.update({
+    id: '/team',
+    path: '/team',
+    getParentRoute: () => AuthenticatedMarketingHubRoute,
+  } as any)
+const AuthenticatedMarketingHubGrowthRoute =
+  AuthenticatedMarketingHubGrowthRouteImport.update({
+    id: '/growth',
+    path: '/growth',
+    getParentRoute: () => AuthenticatedMarketingHubRoute,
   } as any)
 const AuthenticatedDeliverablesApplicationIdRoute =
   AuthenticatedDeliverablesApplicationIdRouteImport.update({
@@ -478,7 +499,7 @@ export interface FileRoutesByFullPath {
   '/growth': typeof AuthenticatedGrowthRoute
   '/home': typeof AuthenticatedHomeRoute
   '/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
-  '/marketing-hub': typeof AuthenticatedMarketingHubRoute
+  '/marketing-hub': typeof AuthenticatedMarketingHubRouteWithChildren
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -497,11 +518,14 @@ export interface FileRoutesByFullPath {
   '/creators/$creatorId': typeof CreatorsCreatorIdRoute
   '/k/$username': typeof KUsernameRoute
   '/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
+  '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/profile/edit': typeof AuthenticatedProfileEditRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/business/profile/edit': typeof BusinessProfileEditRoute
   '/campaigns/': typeof AuthenticatedCampaignsIndexRoute
+  '/marketing-hub/': typeof AuthenticatedMarketingHubIndexRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -546,7 +570,6 @@ export interface FileRoutesByTo {
   '/growth': typeof AuthenticatedGrowthRoute
   '/home': typeof AuthenticatedHomeRoute
   '/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
-  '/marketing-hub': typeof AuthenticatedMarketingHubRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/opportunities': typeof AuthenticatedOpportunitiesRoute
@@ -562,11 +585,14 @@ export interface FileRoutesByTo {
   '/creators/$creatorId': typeof CreatorsCreatorIdRoute
   '/k/$username': typeof KUsernameRoute
   '/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
+  '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/profile/edit': typeof AuthenticatedProfileEditRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/business/profile/edit': typeof BusinessProfileEditRoute
   '/campaigns': typeof AuthenticatedCampaignsIndexRoute
+  '/marketing-hub': typeof AuthenticatedMarketingHubIndexRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
@@ -612,7 +638,7 @@ export interface FileRoutesById {
   '/_authenticated/growth': typeof AuthenticatedGrowthRoute
   '/_authenticated/home': typeof AuthenticatedHomeRoute
   '/_authenticated/instagram-callback': typeof AuthenticatedInstagramCallbackRoute
-  '/_authenticated/marketing-hub': typeof AuthenticatedMarketingHubRoute
+  '/_authenticated/marketing-hub': typeof AuthenticatedMarketingHubRouteWithChildren
   '/_authenticated/matches': typeof AuthenticatedMatchesRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -632,11 +658,14 @@ export interface FileRoutesById {
   '/k/$username': typeof KUsernameRoute
   '/_authenticated/campaigns/$campaignId': typeof AuthenticatedCampaignsCampaignIdRouteWithChildren
   '/_authenticated/deliverables/$applicationId': typeof AuthenticatedDeliverablesApplicationIdRoute
+  '/_authenticated/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
+  '/_authenticated/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/profile/edit': typeof AuthenticatedProfileEditRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/business/profile/edit': typeof BusinessProfileEditRoute
   '/_authenticated/campaigns/': typeof AuthenticatedCampaignsIndexRoute
+  '/_authenticated/marketing-hub/': typeof AuthenticatedMarketingHubIndexRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -702,11 +731,14 @@ export interface FileRouteTypes {
     | '/creators/$creatorId'
     | '/k/$username'
     | '/deliverables/$applicationId'
+    | '/marketing-hub/growth'
+    | '/marketing-hub/team'
     | '/messages/$conversationId'
     | '/profile/edit'
     | '/projects/$projectId'
     | '/business/profile/edit'
     | '/campaigns/'
+    | '/marketing-hub/'
     | '/messages/'
     | '/profile/'
     | '/projects/'
@@ -751,7 +783,6 @@ export interface FileRouteTypes {
     | '/growth'
     | '/home'
     | '/instagram-callback'
-    | '/marketing-hub'
     | '/matches'
     | '/notifications'
     | '/opportunities'
@@ -767,11 +798,14 @@ export interface FileRouteTypes {
     | '/creators/$creatorId'
     | '/k/$username'
     | '/deliverables/$applicationId'
+    | '/marketing-hub/growth'
+    | '/marketing-hub/team'
     | '/messages/$conversationId'
     | '/profile/edit'
     | '/projects/$projectId'
     | '/business/profile/edit'
     | '/campaigns'
+    | '/marketing-hub'
     | '/messages'
     | '/profile'
     | '/projects'
@@ -836,11 +870,14 @@ export interface FileRouteTypes {
     | '/k/$username'
     | '/_authenticated/campaigns/$campaignId'
     | '/_authenticated/deliverables/$applicationId'
+    | '/_authenticated/marketing-hub/growth'
+    | '/_authenticated/marketing-hub/team'
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/profile/edit'
     | '/_authenticated/projects/$projectId'
     | '/business/profile/edit'
     | '/_authenticated/campaigns/'
+    | '/_authenticated/marketing-hub/'
     | '/_authenticated/messages/'
     | '/_authenticated/profile/'
     | '/_authenticated/projects/'
@@ -1282,6 +1319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagesIndexRouteImport
       parentRoute: typeof AuthenticatedMessagesRoute
     }
+    '/_authenticated/marketing-hub/': {
+      id: '/_authenticated/marketing-hub/'
+      path: '/'
+      fullPath: '/marketing-hub/'
+      preLoaderRoute: typeof AuthenticatedMarketingHubIndexRouteImport
+      parentRoute: typeof AuthenticatedMarketingHubRoute
+    }
     '/_authenticated/campaigns/': {
       id: '/_authenticated/campaigns/'
       path: '/campaigns'
@@ -1316,6 +1360,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/messages/$conversationId'
       preLoaderRoute: typeof AuthenticatedMessagesConversationIdRouteImport
       parentRoute: typeof AuthenticatedMessagesRoute
+    }
+    '/_authenticated/marketing-hub/team': {
+      id: '/_authenticated/marketing-hub/team'
+      path: '/team'
+      fullPath: '/marketing-hub/team'
+      preLoaderRoute: typeof AuthenticatedMarketingHubTeamRouteImport
+      parentRoute: typeof AuthenticatedMarketingHubRoute
+    }
+    '/_authenticated/marketing-hub/growth': {
+      id: '/_authenticated/marketing-hub/growth'
+      path: '/growth'
+      fullPath: '/marketing-hub/growth'
+      preLoaderRoute: typeof AuthenticatedMarketingHubGrowthRouteImport
+      parentRoute: typeof AuthenticatedMarketingHubRoute
     }
     '/_authenticated/deliverables/$applicationId': {
       id: '/_authenticated/deliverables/$applicationId'
@@ -1361,6 +1419,24 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedMarketingHubRouteChildren {
+  AuthenticatedMarketingHubGrowthRoute: typeof AuthenticatedMarketingHubGrowthRoute
+  AuthenticatedMarketingHubTeamRoute: typeof AuthenticatedMarketingHubTeamRoute
+  AuthenticatedMarketingHubIndexRoute: typeof AuthenticatedMarketingHubIndexRoute
+}
+
+const AuthenticatedMarketingHubRouteChildren: AuthenticatedMarketingHubRouteChildren =
+  {
+    AuthenticatedMarketingHubGrowthRoute: AuthenticatedMarketingHubGrowthRoute,
+    AuthenticatedMarketingHubTeamRoute: AuthenticatedMarketingHubTeamRoute,
+    AuthenticatedMarketingHubIndexRoute: AuthenticatedMarketingHubIndexRoute,
+  }
+
+const AuthenticatedMarketingHubRouteWithChildren =
+  AuthenticatedMarketingHubRoute._addFileChildren(
+    AuthenticatedMarketingHubRouteChildren,
+  )
 
 interface AuthenticatedMessagesRouteChildren {
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
@@ -1446,7 +1522,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedGrowthRoute: typeof AuthenticatedGrowthRoute
   AuthenticatedHomeRoute: typeof AuthenticatedHomeRoute
   AuthenticatedInstagramCallbackRoute: typeof AuthenticatedInstagramCallbackRoute
-  AuthenticatedMarketingHubRoute: typeof AuthenticatedMarketingHubRoute
+  AuthenticatedMarketingHubRoute: typeof AuthenticatedMarketingHubRouteWithChildren
   AuthenticatedMatchesRoute: typeof AuthenticatedMatchesRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
@@ -1479,7 +1555,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedGrowthRoute: AuthenticatedGrowthRoute,
   AuthenticatedHomeRoute: AuthenticatedHomeRoute,
   AuthenticatedInstagramCallbackRoute: AuthenticatedInstagramCallbackRoute,
-  AuthenticatedMarketingHubRoute: AuthenticatedMarketingHubRoute,
+  AuthenticatedMarketingHubRoute: AuthenticatedMarketingHubRouteWithChildren,
   AuthenticatedMatchesRoute: AuthenticatedMatchesRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,

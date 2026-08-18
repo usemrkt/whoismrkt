@@ -5,17 +5,25 @@
 // existing module (campaigns, applications, contracts, deliverables, match
 // outcomes, trust score, messages, content calendar, brand knowledge) and
 // asks MRKT AI to turn it into a structured strategic briefing — business
-// health, weekly priorities, growth opportunities, campaign suggestions,
-// performance highlights, and (only when the business has named competitors
-// in Brand Knowledge) AI competitive-positioning notes.
+// health, a per-department report (the "AI Marketing Team"), weekly
+// priorities, growth opportunities, campaign suggestions, performance
+// highlights, and (only when the business has named competitors in Brand
+// Knowledge) AI competitive-positioning notes.
 //
 // Cached per (user, day) in marketing_hub_briefings so repeat visits are free;
 // pass { force_refresh: true } to regenerate. Deterministic "action center"
 // facts are computed fresh every call regardless of cache (never stale).
 //
+// On every fresh generation, weekly_priorities / opportunities /
+// campaign_suggestions are ALSO fanned out into individual rows in the
+// (previously unused) ai_recommendations table — that's what makes the
+// Marketing Hub's task cards individually dismissible/completable without a
+// second edge function: the client reads/updates ai_recommendations directly
+// via its existing owner RLS policy.
+//
 // POST /functions/v1/marketing-hub-briefing
 // Body: { force_refresh?: boolean }
-// Returns: { briefing, action_center, generated_at, cached }
+// Returns: { briefing, action_center, recommendations, generated_at, cached }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -24,15 +32,28 @@ import { callAI } from "../_shared/router.ts";
 
 const CREDIT_COST = 10; // matches CREDIT_COST.growth_strategy / profile_audit in src/lib/aiCredits.ts — same "deep intelligence" tier
 
-type BriefingItem = { title: string; why: string; action: string; link: string; priority: "high" | "medium" | "low" };
+type Department = "strategy" | "content" | "brand" | "growth" | "analytics";
+type BriefingItem = {
+  title: string; why: string; action: string; link: string;
+  priority: "high" | "medium" | "low"; department?: Department;
+};
 type Briefing = {
   health:               { score: number; summary: string };
+  departments:          Partial<Record<Department, string>>;
   weekly_priorities:    BriefingItem[];
   opportunities:        BriefingItem[];
   campaign_suggestions: BriefingItem[];
   performance_highlights: string[];
   competitor_notes:    BriefingItem[] | null;
 };
+
+// recommendation_type mirrors the section an item came from; kept distinct
+// from `department` (which department "owns" the item for the org chart).
+const TYPE_FOR_SECTION = {
+  weekly_priorities: "action",
+  opportunities:     "opportunity",
+  campaign_suggestions: "campaign",
+} as const;
 
 function todayPeriodStart(): string {
   return new Date().toISOString().slice(0, 10);
@@ -140,13 +161,30 @@ Deno.serve(async (req: Request) => {
       contractsAwaiting > 0 && { label: `${contractsAwaiting} contract${contractsAwaiting === 1 ? "" : "s"} sent, awaiting signature`, link: "/contracts" },
     ].filter(Boolean);
 
+    // Current recommendation cards for today, respecting any dismiss/complete
+    // the user has already done — read fresh on every call regardless of
+    // briefing cache state, so a cached page load never resurrects a
+    // dismissed card.
+    const fetchRecommendations = async () => {
+      const { data } = await serviceClient
+        .from("ai_recommendations")
+        .select("id, recommendation_type, title, explanation, action, priority, status, meta")
+        .eq("user_id", user.id)
+        .eq("source", "ai_strategist")
+        .eq("status", "active")
+        .contains("meta", { period_start: periodStart })
+        .order("created_at", { ascending: true });
+      return data ?? [];
+    };
+
     // ── Cache check ────────────────────────────────────────────────────────
     if (!body.force_refresh) {
       const { data: cached } = await serviceClient
         .from("marketing_hub_briefings").select("*")
         .eq("user_id", user.id).eq("period_start", periodStart).maybeSingle();
       if (cached) {
-        return jsonOk({ briefing: cached.briefing, action_center: actionCenter, generated_at: cached.generated_at, cached: true }, req);
+        const recommendations = await fetchRecommendations();
+        return jsonOk({ briefing: cached.briefing, action_center: actionCenter, recommendations, generated_at: cached.generated_at, cached: true }, req);
       }
     }
 
@@ -183,7 +221,7 @@ Deno.serve(async (req: Request) => {
       competitors ? `Named competitors: ${competitors}` : "",
     ].filter(Boolean);
 
-    const prompt = `You are producing today's Marketing Hub briefing for a business on MRKT. Use ONLY the facts below — never invent numbers.
+    const prompt = `You are the AI Marketing Team for a business on MRKT, producing today's briefing. Use ONLY the facts below — never invent numbers. You are writing AS the team — each department block should read like that specialist reporting in, not like a generic AI answer.
 
 FACTS:
 ${facts.map((f) => `- ${f}`).join("\n")}
@@ -191,13 +229,20 @@ ${facts.map((f) => `- ${f}`).join("\n")}
 Return ONLY valid JSON, no prose, no markdown fences, matching exactly this shape:
 {
   "health": { "score": <0-100 integer, your holistic assessment>, "summary": "<one sharp sentence>" },
-  "weekly_priorities": [ { "title": "...", "why": "...", "action": "...", "link": "/campaigns|/pipeline|/find-creators|/content-planner|/messages|/chat", "priority": "high|medium|low" } ] (3-4 items),
-  "opportunities": [ same item shape ] (2-3 items, growth-oriented),
-  "campaign_suggestions": [ same item shape ] (1-2 items, only if genuinely warranted by the facts — omit rather than pad),
+  "departments": {
+    "strategy":  "<2-3 sentences, the AI Marketing Strategist reporting on overall direction and what matters most right now>",
+    "content":   "<2-3 sentences, the AI Content Manager reporting on the content calendar and posting cadence>",
+    "brand":     "<2-3 sentences, the AI Brand Manager reporting on brand knowledge completeness and positioning>",
+    "growth":    "<2-3 sentences, the AI Growth lead reporting on trust score and pipeline momentum>",
+    "analytics": "<2-3 sentences, the AI Analytics lead reporting on campaign/creator-match performance so far>"
+  },
+  "weekly_priorities": [ { "title": "...", "why": "...", "action": "...", "link": "/campaigns|/pipeline|/find-creators|/content-planner|/messages|/chat", "priority": "high|medium|low", "department": "strategy|content|brand|growth|analytics" } ] (3-4 items),
+  "opportunities": [ same item shape incl. department ] (2-3 items, growth-oriented),
+  "campaign_suggestions": [ same item shape incl. department ] (1-2 items, only if genuinely warranted by the facts — omit rather than pad),
   "performance_highlights": [ "<short factual sentence>", ... ] (1-3 items, only real positives from the facts — empty array if none),
-  "competitor_notes": ${competitors ? `[ same item shape ] (1-3 items reasoning about positioning against: ${competitors})` : "null"}
+  "competitor_notes": ${competitors ? `[ same item shape incl. department ] (1-3 items reasoning about positioning against: ${competitors})` : "null"}
 }
-Every "why" must cite a specific fact above. Never generic ("post more content"). Tone: senior marketing strategist, direct, executive.`;
+Every "why" must cite a specific fact above. Every department block must also cite a specific fact — if there's nothing real to report for a department (e.g. zero campaigns), say that plainly rather than filling space. Never generic ("post more content"). Tone: senior marketing team, direct, executive — confident, not chatty.`;
 
     let result;
     try {
@@ -231,7 +276,38 @@ Every "why" must cite a specific fact above. Never generic ("post more content")
       generated_at: generatedAt,
     }, { onConflict: "user_id,period_start" });
 
-    return jsonOk({ briefing, action_center: actionCenter, generated_at: generatedAt, cached: false }, req);
+    // ── Fan out into ai_recommendations — one row per actionable item ────────
+    // Clear out today's previous AI-strategist rows first (only ones still
+    // 'active' — a user's dismiss/complete choice is never touched) so a
+    // force-refresh doesn't accumulate duplicates alongside the new set.
+    await serviceClient
+      .from("ai_recommendations")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("source", "ai_strategist")
+      .eq("status", "active")
+      .contains("meta", { period_start: periodStart });
+
+    const newRows = (["weekly_priorities", "opportunities", "campaign_suggestions"] as const)
+      .flatMap((section) => (briefing[section] ?? []).map((item) => ({
+        user_id:            user.id,
+        recommendation_type: TYPE_FOR_SECTION[section],
+        title:               item.title,
+        explanation:          item.why,
+        action:               item.action,
+        priority:             item.priority,
+        status:               "active",
+        source:               "ai_strategist",
+        meta:                 { link: item.link, department: item.department ?? null, period_start: periodStart },
+      })));
+
+    if (newRows.length > 0) {
+      await serviceClient.from("ai_recommendations").insert(newRows);
+    }
+
+    const recommendations = await fetchRecommendations();
+
+    return jsonOk({ briefing, action_center: actionCenter, recommendations, generated_at: generatedAt, cached: false }, req);
 
   } catch (err) {
     console.error("marketing-hub-briefing error:", err);

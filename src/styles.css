@@ -1151,6 +1151,11 @@
 .marketing-hub-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 900px) { .marketing-hub-grid { grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; } }
 
+/* AI Marketing Team org chart: responsive card row, connector lines drawn by JSX siblings */
+.marketing-hub-orgchart-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 640px)  { .marketing-hub-orgchart-row { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 1000px) { .marketing-hub-orgchart-row { grid-template-columns: repeat(7, 1fr); gap: 12px; } }
+
 /* Growth profile-completion card: column on mobile, row on desktop */
 .growth-compl-card { display: flex; flex-direction: column; gap: 14px; }
 @media (min-width: 768px) {
