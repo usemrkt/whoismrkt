@@ -67,7 +67,7 @@ async function runPipeline(serviceClient: any, businessId: string, maxFamilies: 
     try {
       const added = await runFamily(serviceClient, businessId, facts, plan.family, plan.queries);
       findingsAdded += added;
-      await upsertCursor(serviceClient, businessId, plan.family, "success", added === 0 ? "no_findings" : "success");
+      await upsertCursor(serviceClient, businessId, plan.family, "success", added === 0 ? "no_findings" : "success", added);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error(`market-intelligence-refresh: family "${plan.family}" failed for ${businessId}:`, message);
@@ -86,7 +86,7 @@ async function runPipeline(serviceClient: any, businessId: string, maxFamilies: 
 }
 
 // deno-lint-ignore no-explicit-any
-async function upsertCursor(serviceClient: any, businessId: string, family: SearchFamily, status: "success" | "error", runStatus: "success" | "no_findings" | "error") {
+async function upsertCursor(serviceClient: any, businessId: string, family: SearchFamily, status: "success" | "error", runStatus: "success" | "no_findings" | "error", findingsAdded = 0) {
   const now = new Date();
   const retryHours = runStatus === "error" ? Math.min(FAMILY_CADENCE_HOURS[family] / 4, 6) : FAMILY_CADENCE_HOURS[family];
   const nextEligible = new Date(now.getTime() + retryHours * 3_600_000);
@@ -102,6 +102,7 @@ async function upsertCursor(serviceClient: any, businessId: string, family: Sear
     last_run_at: now.toISOString(),
     next_eligible_at: nextEligible.toISOString(),
     last_run_status: runStatus,
+    last_run_search_count: findingsAdded,
     consecutive_empty_runs: runStatus === "no_findings" ? (existing?.consecutive_empty_runs ?? 0) + 1 : 0,
     updated_at: now.toISOString(),
   }, { onConflict: "business_id,search_family" });
@@ -350,7 +351,13 @@ Deno.serve(async (req: Request) => {
       const results = [];
       for (const businessId of businessIds) {
         try {
-          const r = await runPipeline(serviceClient, businessId, 5);
+          // 3 (not 5) per business per cron tick — real E2E testing showed a
+          // single invocation processing multiple businesses at 5 families
+          // each can approach the edge function's execution time ceiling
+          // (search+classify against real web results is not fast). Smaller
+          // batches per tick, same hourly cadence, picks up the remainder
+          // next tick — never lossy, just spread over more ticks.
+          const r = await runPipeline(serviceClient, businessId, 3);
           results.push({ business_id: businessId, ...r });
         } catch (e) {
           console.error(`market-intelligence-refresh cron: business ${businessId} failed:`, e);
