@@ -54,6 +54,12 @@ export const CREDIT_COST = {
   // Marketing Health (Phase 6) — scores themselves are free (deterministic,
   // zero AI); this only charges for the AI narrative, on cache miss.
   marketing_health_refresh:     5, // single balanced-tier call over already-clean scores — ~$0.01-0.02 real cost
+  // Executive Reports (Phase 7) — tiered by cadence/stakes, not flat.
+  // Monthly deliberately uses Opus (deep tier) — least frequent (<=12/yr),
+  // most strategic report, a considered exception to the cheapest-tier default.
+  executive_report_daily:      3,  // Haiku, short — ~$0.01 real cost
+  executive_report_weekly:    10,  // Sonnet, full structure — ~$0.03-0.05 real cost
+  executive_report_monthly:   25,  // Opus, deep and rare — ~$0.10-0.15 real cost
   // Asset generation
   asset_generation:     15, // AI asset composition — ~$0.05
   image_creation:       15, // image gen (Flux/DALL-E) — ~$0.04

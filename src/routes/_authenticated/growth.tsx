@@ -866,6 +866,7 @@ function BusinessGrowth() {
 
 function GrowthPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [accountType, setAccountType] = useState<"creator" | "business" | null>(null);
   const [displayName, setDisplayName] = useState("");
 
@@ -884,6 +885,17 @@ function GrowthPage() {
         setAccountType(isBiz ? "business" : "creator");
       });
   }, [user]);
+
+  // Business accounts landing on this legacy page get the real, richer
+  // Growth section inside the Marketing Hub instead — same "redirect a
+  // business-scoped page into the Hub" pattern already used for
+  // create.tsx -> /marketing-hub/content. This page's business branch (below)
+  // is unreachable from the business sidebar already; this just closes the
+  // remaining direct-URL path. Creators are completely unaffected — no
+  // redirect fires for them, /growth renders exactly as before.
+  useEffect(() => {
+    if (accountType === "business") navigate({ to: "/marketing-hub/growth" });
+  }, [accountType, navigate]);
 
   return (
     <div style={{ background: C.canvas }}>

@@ -120,6 +120,14 @@ export const ROUTES: Record<string, RouteConfig> = {
   // never generates or picks the numbers themselves.
   marketing_health_narrative:    { primary: "anthropic", tier: "balanced", fallback: "openai",  maxTokens: 1500, temperature: 0.40 },
 
+  // ── Executive Reports (Phase 7): tiered by cadence and stakes, not a flat
+  // default. Monthly deliberately uses "deep" (Opus) — a considered exception
+  // to "cheapest reliable path": it's the least frequent of the three (≤12/yr,
+  // lowest total cost impact) and explicitly the most strategic report.
+  executive_report_daily:        { primary: "anthropic", tier: "fast",     fallback: "openai",  maxTokens: 800,  temperature: 0.40 },
+  executive_report_weekly:       { primary: "anthropic", tier: "balanced", fallback: "openai",  maxTokens: 3000, temperature: 0.45 },
+  executive_report_monthly:      { primary: "anthropic", tier: "deep",     fallback: "openai",  maxTokens: 4000, temperature: 0.45 },
+
   // ── Higgsfield: Content generation — image, video, assets ────────────────
   image_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },
   video_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },

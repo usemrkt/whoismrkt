@@ -73,6 +73,7 @@ import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_au
 import { Route as AuthenticatedProfileEditRouteImport } from './routes/_authenticated/profile.edit'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages.$conversationId'
 import { Route as AuthenticatedMarketingHubTeamRouteImport } from './routes/_authenticated/marketing-hub.team'
+import { Route as AuthenticatedMarketingHubReportsRouteImport } from './routes/_authenticated/marketing-hub.reports'
 import { Route as AuthenticatedMarketingHubIntelligenceRouteImport } from './routes/_authenticated/marketing-hub.intelligence'
 import { Route as AuthenticatedMarketingHubHealthRouteImport } from './routes/_authenticated/marketing-hub.health'
 import { Route as AuthenticatedMarketingHubGrowthRouteImport } from './routes/_authenticated/marketing-hub.growth'
@@ -424,6 +425,12 @@ const AuthenticatedMarketingHubTeamRoute =
     path: '/team',
     getParentRoute: () => AuthenticatedMarketingHubRoute,
   } as any)
+const AuthenticatedMarketingHubReportsRoute =
+  AuthenticatedMarketingHubReportsRouteImport.update({
+    id: '/reports',
+    path: '/reports',
+    getParentRoute: () => AuthenticatedMarketingHubRoute,
+  } as any)
 const AuthenticatedMarketingHubIntelligenceRoute =
   AuthenticatedMarketingHubIntelligenceRouteImport.update({
     id: '/intelligence',
@@ -551,6 +558,7 @@ export interface FileRoutesByFullPath {
   '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/marketing-hub/health': typeof AuthenticatedMarketingHubHealthRoute
   '/marketing-hub/intelligence': typeof AuthenticatedMarketingHubIntelligenceRoute
+  '/marketing-hub/reports': typeof AuthenticatedMarketingHubReportsRoute
   '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/profile/edit': typeof AuthenticatedProfileEditRoute
@@ -622,6 +630,7 @@ export interface FileRoutesByTo {
   '/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/marketing-hub/health': typeof AuthenticatedMarketingHubHealthRoute
   '/marketing-hub/intelligence': typeof AuthenticatedMarketingHubIntelligenceRoute
+  '/marketing-hub/reports': typeof AuthenticatedMarketingHubReportsRoute
   '/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/profile/edit': typeof AuthenticatedProfileEditRoute
@@ -699,6 +708,7 @@ export interface FileRoutesById {
   '/_authenticated/marketing-hub/growth': typeof AuthenticatedMarketingHubGrowthRoute
   '/_authenticated/marketing-hub/health': typeof AuthenticatedMarketingHubHealthRoute
   '/_authenticated/marketing-hub/intelligence': typeof AuthenticatedMarketingHubIntelligenceRoute
+  '/_authenticated/marketing-hub/reports': typeof AuthenticatedMarketingHubReportsRoute
   '/_authenticated/marketing-hub/team': typeof AuthenticatedMarketingHubTeamRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/profile/edit': typeof AuthenticatedProfileEditRoute
@@ -776,6 +786,7 @@ export interface FileRouteTypes {
     | '/marketing-hub/growth'
     | '/marketing-hub/health'
     | '/marketing-hub/intelligence'
+    | '/marketing-hub/reports'
     | '/marketing-hub/team'
     | '/messages/$conversationId'
     | '/profile/edit'
@@ -847,6 +858,7 @@ export interface FileRouteTypes {
     | '/marketing-hub/growth'
     | '/marketing-hub/health'
     | '/marketing-hub/intelligence'
+    | '/marketing-hub/reports'
     | '/marketing-hub/team'
     | '/messages/$conversationId'
     | '/profile/edit'
@@ -923,6 +935,7 @@ export interface FileRouteTypes {
     | '/_authenticated/marketing-hub/growth'
     | '/_authenticated/marketing-hub/health'
     | '/_authenticated/marketing-hub/intelligence'
+    | '/_authenticated/marketing-hub/reports'
     | '/_authenticated/marketing-hub/team'
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/profile/edit'
@@ -1420,6 +1433,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMarketingHubTeamRouteImport
       parentRoute: typeof AuthenticatedMarketingHubRoute
     }
+    '/_authenticated/marketing-hub/reports': {
+      id: '/_authenticated/marketing-hub/reports'
+      path: '/reports'
+      fullPath: '/marketing-hub/reports'
+      preLoaderRoute: typeof AuthenticatedMarketingHubReportsRouteImport
+      parentRoute: typeof AuthenticatedMarketingHubRoute
+    }
     '/_authenticated/marketing-hub/intelligence': {
       id: '/_authenticated/marketing-hub/intelligence'
       path: '/intelligence'
@@ -1506,6 +1526,7 @@ interface AuthenticatedMarketingHubRouteChildren {
   AuthenticatedMarketingHubGrowthRoute: typeof AuthenticatedMarketingHubGrowthRoute
   AuthenticatedMarketingHubHealthRoute: typeof AuthenticatedMarketingHubHealthRoute
   AuthenticatedMarketingHubIntelligenceRoute: typeof AuthenticatedMarketingHubIntelligenceRoute
+  AuthenticatedMarketingHubReportsRoute: typeof AuthenticatedMarketingHubReportsRoute
   AuthenticatedMarketingHubTeamRoute: typeof AuthenticatedMarketingHubTeamRoute
   AuthenticatedMarketingHubIndexRoute: typeof AuthenticatedMarketingHubIndexRoute
 }
@@ -1520,6 +1541,8 @@ const AuthenticatedMarketingHubRouteChildren: AuthenticatedMarketingHubRouteChil
     AuthenticatedMarketingHubHealthRoute: AuthenticatedMarketingHubHealthRoute,
     AuthenticatedMarketingHubIntelligenceRoute:
       AuthenticatedMarketingHubIntelligenceRoute,
+    AuthenticatedMarketingHubReportsRoute:
+      AuthenticatedMarketingHubReportsRoute,
     AuthenticatedMarketingHubTeamRoute: AuthenticatedMarketingHubTeamRoute,
     AuthenticatedMarketingHubIndexRoute: AuthenticatedMarketingHubIndexRoute,
   }
