@@ -681,12 +681,13 @@ export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
       <div className="studio-page-inner">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
-        {/* embedded=true (Marketing Hub) suppresses the title/description —
-            the Hub's own header already covers that — but keeps the credit
-            widget, since it's genuinely useful state, not chrome. */}
+        {/* embedded=true (Marketing Hub) skips this block entirely — the Hub's
+            own header already covers the title. The credit widget moves into
+            the tabs row below instead of sitting alone in an otherwise-empty
+            header, which is what previously left a large dead gap when embedded. */}
+        {!embedded && (
         <div style={{ marginBottom: 36 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: embedded ? "flex-end" : "space-between" }}>
-            {!embedded && (
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{
@@ -719,7 +720,6 @@ export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
                 AI-powered content creation. Generate images and videos for any platform.
               </p>
             </div>
-            )}
             <div style={{
               padding:      "10px 16px",
               background:   C.surface,
@@ -748,9 +748,11 @@ export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── Tabs ────────────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 32 }}>
+        <div style={{ display: "flex", gap: 4 }}>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -786,6 +788,19 @@ export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
               {t.label}
             </button>
           ))}
+        </div>
+        {embedded && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 7, flexShrink: 0,
+            padding: "6px 12px", borderRadius: 10,
+            background: C.surface, border: `1px solid ${usage && usage.credits_remaining <= 0 ? C.redBorder : C.borderSubtle}`,
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: usage && usage.credits_remaining <= 0 ? C.red : C.textPrimary }}>
+              {usage ? usage.credits_remaining : "…"}
+            </span>
+            <span style={{ fontSize: 11.5, color: C.textTertiary }}>credits left{usage ? ` of ${usage.limit}/mo` : ""}</span>
+          </div>
+        )}
         </div>
 
         {/* ── Generate tab ─────────────────────────────────────────────────── */}
