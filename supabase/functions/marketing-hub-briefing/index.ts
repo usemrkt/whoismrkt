@@ -35,6 +35,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, isRateLimited, STRICT_AI_RATE, requireAuth, jsonOk, jsonErr, AuthError } from "../_shared/security.ts";
 import { callAI } from "../_shared/router.ts";
+import { computeBusinessAnalytics } from "../_shared/analytics.ts";
 
 const CREDIT_COST = 10; // matches CREDIT_COST.growth_strategy / profile_audit in src/lib/aiCredits.ts — same "deep intelligence" tier
 
@@ -103,16 +104,21 @@ Deno.serve(async (req: Request) => {
     if (!isBusiness) return jsonErr("Marketing Hub is available for business accounts.", req, 403);
 
     // ── Always-fresh deterministic aggregation (action center + AI input) ────
+    // Cross-business metrics (win/rehire rate, etc.) now come from the shared
+    // Analytics Engine (_shared/analytics.ts) — the single source of truth
+    // every future Marketing Hub section reads from — rather than being
+    // computed inline here a second time.
     const [
+      analytics,
       { data: campaigns },
       { data: brand },
       { data: businessIntel },
       { data: contracts },
       { data: deliverables },
-      { data: matchOutcomes },
       { data: convos },
       { data: upcomingContent },
     ] = await Promise.all([
+      computeBusinessAnalytics(serviceClient, user.id),
       serviceClient.from("campaigns")
         .select("id, title, status, is_published, compensation_type, compensation_amount_fixed, compensation_budget_min, compensation_budget_max, deadline, created_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
@@ -123,9 +129,6 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false }).limit(50),
       serviceClient.from("campaign_deliverable_submissions")
         .select("id, status, submitted_at").eq("business_id", user.id).limit(200),
-      serviceClient.from("match_outcomes")
-        .select("was_shortlisted, was_accepted, contract_accepted, payment_completed, was_rehired")
-        .eq("business_user_id", user.id).limit(200),
       serviceClient.from("conversation_participants")
         .select("unread_count").eq("user_id", user.id).gt("unread_count", 0),
       serviceClient.from("content_planner_items")
@@ -199,12 +202,6 @@ Deno.serve(async (req: Request) => {
     const pendingDeliverables = (deliverables ?? []).filter((d) => d.status === "submitted").length;
     const unreadMessages      = (convos ?? []).reduce((s, c) => s + (c.unread_count ?? 0), 0);
     const contractsAwaiting   = (contracts ?? []).filter((c) => c.status === "sent").length;
-    const winRate = matchOutcomes && matchOutcomes.length > 0
-      ? Math.round((matchOutcomes.filter((m) => m.was_accepted).length / matchOutcomes.length) * 100)
-      : null;
-    const rehireRate = matchOutcomes && matchOutcomes.length > 0
-      ? Math.round((matchOutcomes.filter((m) => m.was_rehired).length / matchOutcomes.length) * 100)
-      : null;
 
     // Deterministic action center — always accurate, never depends on the AI call.
     const actionCenter = [
@@ -263,7 +260,8 @@ Deno.serve(async (req: Request) => {
       `Applications: ${Object.entries(applicationCounts).map(([s, n]) => `${n} ${s}`).join(", ") || "none yet"}`,
       `Contracts: ${contracts?.length ?? 0} total, ${contractsAwaiting} awaiting signature`,
       `Deliverables awaiting review: ${pendingDeliverables}`,
-      winRate !== null ? `Historical creator-match acceptance rate: ${winRate}%, rehire rate: ${rehireRate}%` : "No match-outcome history yet",
+      analytics.matchWinRate ? `Creator-match acceptance rate: ${analytics.matchWinRate.evidence}` : "No match-outcome history yet",
+      analytics.rehireRate ? `Rehire rate: ${analytics.rehireRate.evidence}` : "",
       `Unread messages: ${unreadMessages}`,
       `Upcoming content (14d): ${(upcomingContent ?? []).length} scheduled pieces`,
       brand?.target_audience ? `Target audience: ${brand.target_audience.slice(0, 200)}` : "",
