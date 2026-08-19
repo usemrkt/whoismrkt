@@ -24,6 +24,7 @@ import {
   assembleReportInputs, buildContinuityFacts, extractStructuredFields,
   type ReportType, type ReportInputs,
 } from "../_shared/executiveReports.ts";
+import { priorityForHealthScore } from "../_shared/agencyWorkspace.ts";
 
 const CREDIT_COST: Record<ReportType, number> = {
   daily_brief: 3,       // Haiku, short — ~$0.01 real cost
@@ -260,6 +261,24 @@ Deno.serve(async (req: Request) => {
     if (saveErr || !saved) {
       console.error("executive-reports: save failed", saveErr);
       return jsonErr("Report generated but failed to save. Please try again.", req, 500);
+    }
+
+    // ── Agency Workspace fan-out (Phase 8) — same guarded pattern as
+    // marketing-health's: skip if an identical active recommendation already
+    // exists, so a recurring priority recommendation (Phase 7's own
+    // continuity mechanism may legitimately repeat one) doesn't pile up
+    // duplicate queue items for the same real issue.
+    const { data: alreadyQueued } = await serviceClient
+      .from("ai_recommendations").select("id").eq("user_id", user.id)
+      .eq("source", "executive_reports").eq("status", "active").eq("title", extracted.priority_recommendation).maybeSingle();
+    if (!alreadyQueued) {
+      await serviceClient.from("ai_recommendations").insert({
+        user_id: user.id, recommendation_type: "action", title: extracted.priority_recommendation,
+        explanation: reportType === "daily_brief" ? null : (narrative as { executive_summary?: { major_change?: string } }).executive_summary?.major_change ?? null,
+        action: null, priority: priorityForHealthScore(extracted.overall_health_score),
+        status: "active", source: "executive_reports",
+        meta: { link: "/marketing-hub/reports", source_report_id: saved.id },
+      });
     }
 
     return jsonOk({ report: saved, generated_at: generatedAt, cached: false }, req);

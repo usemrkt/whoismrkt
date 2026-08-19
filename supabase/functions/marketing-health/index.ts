@@ -25,6 +25,7 @@ import { callAI } from "../_shared/router.ts";
 import { computeBusinessAnalytics } from "../_shared/analytics.ts";
 import { buildIntelligenceSummary } from "../_shared/marketIntelligence.ts";
 import { computeMarketingHealth, type MarketingHealthResult } from "../_shared/marketingHealth.ts";
+import { priorityForHealthScore } from "../_shared/agencyWorkspace.ts";
 
 const CREDIT_COST = 5; // matches CREDIT_COST.marketing_health_refresh in src/lib/aiCredits.ts — ~$0.01-0.02 real cost, charged only on cache miss
 
@@ -179,6 +180,42 @@ Return ONLY valid JSON, no prose, no markdown fences:
       provider:     result.provider,
       generated_at: generatedAt,
     }, { onConflict: "business_id,period_start" });
+
+    // ── Agency Workspace fan-out (Phase 8) — every section's actionable
+    // output must actually land in the unified work queue. Deterministic
+    // priority (never AI-assigned) via priorityForHealthScore. Guarded by an
+    // existing-active-row check so a persistent weakness/risk doesn't pile up
+    // a new row every day it's regenerated — it's the SAME real issue until
+    // it's resolved or dismissed.
+    if (health.biggestWeakness) {
+      const title = `Improve ${health.biggestWeakness.label}`;
+      const { data: already } = await serviceClient
+        .from("ai_recommendations").select("id").eq("user_id", user.id)
+        .eq("source", "marketing_health").eq("status", "active").eq("title", title).maybeSingle();
+      if (!already) {
+        await serviceClient.from("ai_recommendations").insert({
+          user_id: user.id, recommendation_type: "action", title,
+          explanation: narrative.biggest_weakness_explanation ?? `${health.biggestWeakness.label} scored ${health.biggestWeakness.score}/100`,
+          action: narrative.highest_priority_action, priority: priorityForHealthScore(health.biggestWeakness.score),
+          status: "active", source: "marketing_health",
+          meta: { link: "/marketing-hub/health", source_category: health.biggestWeakness.category },
+        });
+      }
+    }
+    if (health.largestRisk) {
+      const { data: already } = await serviceClient
+        .from("ai_recommendations").select("id").eq("user_id", user.id)
+        .eq("source", "marketing_health").eq("status", "active").eq("title", health.largestRisk.title).maybeSingle();
+      if (!already) {
+        await serviceClient.from("ai_recommendations").insert({
+          user_id: user.id, recommendation_type: "action", title: health.largestRisk.title,
+          explanation: narrative.largest_risk_explanation ?? health.largestRisk.evidence,
+          action: null, priority: priorityForHealthScore(health.overall.score),
+          status: "active", source: "marketing_health",
+          meta: { link: "/marketing-hub/health" },
+        });
+      }
+    }
 
     return jsonOk({ health, narrative, generated_at: generatedAt, cached: false }, req);
 
