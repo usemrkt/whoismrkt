@@ -51,6 +51,9 @@ export const CREDIT_COST = {
   // than the conversational tiers above.
   market_intelligence_refresh: 15, // up to 3 due search families — ~$0.08 real cost
   market_intelligence_brief:    3, // Executive Brief synthesis, only charged on cache miss — ~$0.017 real cost
+  // Marketing Health (Phase 6) — scores themselves are free (deterministic,
+  // zero AI); this only charges for the AI narrative, on cache miss.
+  marketing_health_refresh:     5, // single balanced-tier call over already-clean scores — ~$0.01-0.02 real cost
   // Asset generation
   asset_generation:     15, // AI asset composition — ~$0.05
   image_creation:       15, // image gen (Flux/DALL-E) — ~$0.04

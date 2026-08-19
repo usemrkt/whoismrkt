@@ -62,6 +62,12 @@ export interface BusinessAnalytics {
   rehireRate: Metric | null;
   campaignHealth: { avgScore: number | null; perCampaign: CampaignHealthSummary[] };
   trend: { applications: TrendWindow; messages: TrendWindow; pipelineUpdates: TrendWindow } | null;
+  // Added for Marketing Health (Phase 6) — same "extend the Analytics Engine,
+  // never calculate locally" discipline. All three reuse data this module
+  // already fetches, or a trivial extension of an existing fetch.
+  avgCreatorTrust: Metric | null;
+  brandPerceptionScore: Metric | null;
+  paymentReliability: Metric | null;
 }
 
 function pct(n: number, d: number): number {
@@ -91,10 +97,13 @@ export async function computeBusinessAnalytics(supabase: SupabaseClient, userId:
     supabase.from("contracts").select("status, creator_id, business_id").eq("business_id", userId),
     supabase.from("campaign_deliverable_submissions").select("status, submitted_at, deadline").eq("business_id", userId),
     supabase.from("campaign_payments").select("status, gross_amount_cents, campaign_id").eq("business_id", userId),
-    supabase.from("reviews").select("rating").eq("reviewed_user_id", userId),
+    // Extended (Phase 6) from `select("rating")` to also pull the sub-ratings
+    // Marketing Health's Brand Health / Revenue Health categories need —
+    // real, already-collected data, just not aggregated by anything before.
+    supabase.from("reviews").select("rating, communication_rating, professionalism_rating, brief_quality_rating, responsiveness_rating, payment_reliability_rating").eq("reviewed_user_id", userId),
     supabase.from("generated_assets").select("id, created_at").eq("user_id", userId).gte("created_at", days(30)),
     supabase.from("content_planner_items").select("id, created_at").eq("user_id", userId).gte("created_at", days(30)),
-    supabase.from("match_outcomes").select("was_accepted, was_rehired, creator_profile_id").eq("business_user_id", userId),
+    supabase.from("match_outcomes").select("was_accepted, was_rehired, creator_profile_id, creator_trust_at_time").eq("business_user_id", userId),
     supabase.from("campaign_health_scores").select("campaign_id, score").eq("user_id", userId),
     supabase.from("business_daily_metrics").select("metric_date, applications_received, messages_sent, pipeline_updates").eq("user_id", userId).order("metric_date", { ascending: false }).limit(30),
   ]);
@@ -171,6 +180,37 @@ export async function computeBusinessAnalytics(supabase: SupabaseClient, userId:
       evidence: `average ${Math.round(avg * 10) / 10}★ across ${reviews.length} review${reviews.length === 1 ? "" : "s"} from creators` };
   }
 
+  // ── Brand perception (Phase 6, Marketing Health's Brand Health) — average
+  //    across the sub-ratings that speak to how this business is to work
+  //    with, from the creator's perspective. Real, MRKT-unique signal;
+  //    not every review has every sub-rating filled in, so each is averaged
+  //    only over the reviews that actually set it. ─────────────────────────
+  let brandPerceptionScore: Metric | null = null;
+  {
+    type ReviewRow = { communication_rating: number | null; professionalism_rating: number | null; brief_quality_rating: number | null; responsiveness_rating: number | null };
+    const dims: (keyof ReviewRow)[] = ["communication_rating", "professionalism_rating", "brief_quality_rating", "responsiveness_rating"];
+    const rows = (reviews ?? []) as ReviewRow[];
+    const values = dims.flatMap((d) => rows.map((r) => r[d]).filter((v): v is number => v !== null && v !== undefined));
+    if (values.length > 0) {
+      const avg = values.reduce((s, v) => s + v, 0) / values.length;
+      brandPerceptionScore = { value: Math.round(avg * 10) / 10, sampleSize: values.length,
+        evidence: `average ${Math.round(avg * 10) / 10}★ across ${values.length} rated dimension${values.length === 1 ? "" : "s"} (communication, professionalism, brief quality, responsiveness) from creators` };
+    }
+  }
+
+  // ── Payment reliability (Phase 6, Marketing Health's Revenue Health) ─────
+  let paymentReliability: Metric | null = null;
+  {
+    type ReviewRow = { payment_reliability_rating: number | null };
+    const rows = (reviews ?? []) as ReviewRow[];
+    const values = rows.map((r) => r.payment_reliability_rating).filter((v): v is number => v !== null && v !== undefined);
+    if (values.length > 0) {
+      const avg = values.reduce((s, v) => s + v, 0) / values.length;
+      paymentReliability = { value: Math.round(avg * 10) / 10, sampleSize: values.length,
+        evidence: `average ${Math.round(avg * 10) / 10}★ payment-reliability rating across ${values.length} review${values.length === 1 ? "" : "s"} from creators` };
+    }
+  }
+
   // ── Content production volume (last 30 days) — always real, can be 0 ─────
   const assetCount = (assets ?? []).length;
   const contentCount = (contentItems ?? []).length;
@@ -211,6 +251,21 @@ export async function computeBusinessAnalytics(supabase: SupabaseClient, userId:
     }
   }
 
+  // ── Avg creator trust matched (Phase 6, Marketing Health's Retention/
+  //    Creator Network context) — creator_trust_at_time is captured at match
+  //    time by the Phase 4C trigger, real and already fetched here. ────────
+  let avgCreatorTrust: Metric | null = null;
+  {
+    const trustValues = outcomes
+      .map((m: { creator_trust_at_time: number | null }) => m.creator_trust_at_time)
+      .filter((v: number | null): v is number => v !== null && v !== undefined);
+    if (trustValues.length > 0) {
+      const avg = trustValues.reduce((s: number, v: number) => s + v, 0) / trustValues.length;
+      avgCreatorTrust = { value: Math.round(avg), sampleSize: trustValues.length,
+        evidence: `average creator trust score of ${Math.round(avg)}/100 across ${trustValues.length} matched creator${trustValues.length === 1 ? "" : "s"}` };
+    }
+  }
+
   // ── Campaign health (compute_campaign_health, now wired) ─────────────────
   const healthRows = healthScores ?? [];
   const titleById = new Map(camps.map((c: { id: string; title: string }) => [c.id, c.title]));
@@ -244,5 +299,6 @@ export async function computeBusinessAnalytics(supabase: SupabaseClient, userId:
     avgCampaignDurationDays, campaignVelocity, matchWinRate, rehireRate,
     campaignHealth: { avgScore: avgHealth, perCampaign },
     trend,
+    avgCreatorTrust, brandPerceptionScore, paymentReliability,
   };
 }

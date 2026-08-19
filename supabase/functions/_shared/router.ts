@@ -115,6 +115,11 @@ export const ROUTES: Record<string, RouteConfig> = {
   market_intelligence_classify:  { primary: "anthropic", tier: "fast",     fallback: "openai",  maxTokens: 1200, temperature: 0.20 },
   market_intelligence_synthesis: { primary: "anthropic", tier: "balanced", fallback: "openai",  maxTokens: 3000, temperature: 0.50 },
 
+  // ── Marketing Health (Phase 6): AI only narrates deterministic scores that
+  // were already computed and selected by _shared/marketingHealth.ts — it
+  // never generates or picks the numbers themselves.
+  marketing_health_narrative:    { primary: "anthropic", tier: "balanced", fallback: "openai",  maxTokens: 1500, temperature: 0.40 },
+
   // ── Higgsfield: Content generation — image, video, assets ────────────────
   image_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },
   video_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },

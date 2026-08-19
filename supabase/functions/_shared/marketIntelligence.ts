@@ -380,6 +380,11 @@ export interface IntelligenceSummary {
   topOpportunities:    IntelligenceSummaryItem[]; // max 3
   topThreats:          IntelligenceSummaryItem[]; // max 3
   relevantTrends:      IntelligenceSummaryItem[]; // max 3
+  // category='reputation_sentiment' findings — these map to type='market_signal',
+  // which none of the four buckets above surface. Added for Marketing Health's
+  // Brand Health category (Phase 6), which needs external sentiment signals
+  // specifically, not just competitor/opportunity/threat/trend.
+  reputationSignals:   IntelligenceSummaryItem[]; // max 2
   asOf:                string;
   totalActiveFindings: number;
 }
@@ -429,10 +434,11 @@ export async function buildIntelligenceSummary(supabase: any, businessId: string
   });
 
   return {
-    competitorMoves:  ranked.filter((f) => f.type === "competitor").slice(0, 5).map(toItem),
-    topOpportunities: ranked.filter((f) => f.type === "opportunity").slice(0, 3).map(toItem),
-    topThreats:       ranked.filter((f) => f.type === "threat").slice(0, 3).map(toItem),
-    relevantTrends:   ranked.filter((f) => f.type === "trend").slice(0, 3).map(toItem),
+    competitorMoves:   ranked.filter((f) => f.type === "competitor").slice(0, 5).map(toItem),
+    topOpportunities:  ranked.filter((f) => f.type === "opportunity").slice(0, 3).map(toItem),
+    topThreats:        ranked.filter((f) => f.type === "threat").slice(0, 3).map(toItem),
+    relevantTrends:    ranked.filter((f) => f.type === "trend").slice(0, 3).map(toItem),
+    reputationSignals: ranked.filter((f) => f.category === "reputation_sentiment").slice(0, 2).map(toItem),
     asOf: now.toISOString(),
     totalActiveFindings: rows.length,
   };

@@ -37,6 +37,7 @@ import { corsHeaders, isRateLimited, STRICT_AI_RATE, requireAuth, jsonOk, jsonEr
 import { callAI } from "../_shared/router.ts";
 import { computeBusinessAnalytics } from "../_shared/analytics.ts";
 import { buildIntelligenceSummary } from "../_shared/marketIntelligence.ts";
+import { computeMarketingHealth, buildHealthSummaryForAI } from "../_shared/marketingHealth.ts";
 
 const CREDIT_COST = 10; // matches CREDIT_COST.growth_strategy / profile_audit in src/lib/aiCredits.ts — same "deep intelligence" tier
 
@@ -141,6 +142,12 @@ Deno.serve(async (req: Request) => {
         .lte("scheduled_date", new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10))
         .order("scheduled_date", { ascending: true }),
     ]);
+
+    // Marketing Health (Phase 6) — deterministic, zero extra queries (reuses
+    // the analytics/intelSummary already fetched above). Same "controlled
+    // summary, not a raw dump" pattern as the intelligence summary below.
+    const health = computeMarketingHealth(analytics, intelSummary);
+    const healthSummaryLines = buildHealthSummaryForAI(health);
 
     let applicationCounts: Record<string, number> = {};
     const perCampaignApps: Record<string, Record<string, number>> = {};
@@ -302,6 +309,8 @@ Deno.serve(async (req: Request) => {
         ...intelSummary.topThreats.map((f) => `  Market threat: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
         ...intelSummary.relevantTrends.map((f) => `  Market trend: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
       ] : ["No external market intelligence gathered yet — Market Intelligence hasn't run for this business."]),
+      // Marketing Health (Phase 6) — a few capped, already-deterministic lines.
+      ...healthSummaryLines.map((l) => `  Marketing Health: ${l}`),
     ].filter(Boolean);
 
     const prompt = `You are the AI Marketing Team for a business on MRKT, producing today's briefing. Use ONLY the facts below — never invent numbers. You are writing AS the team — each department block should read like that specialist reporting in, not like a generic AI answer.
