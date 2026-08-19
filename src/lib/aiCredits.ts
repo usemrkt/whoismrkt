@@ -46,6 +46,11 @@ export const CREDIT_COST = {
   visibility_report:    10,
   growth_strategy:      10,
   marketing_hub_briefing: 10, // Marketing Hub daily briefing — same depth as growth_strategy
+  // Market Intelligence (Phase 5) — real cost includes Anthropic web search
+  // ($10/1000 searches) on top of normal tokens, priced closer to real spend
+  // than the conversational tiers above.
+  market_intelligence_refresh: 15, // up to 3 due search families — ~$0.08 real cost
+  market_intelligence_brief:    3, // Executive Brief synthesis, only charged on cache miss — ~$0.017 real cost
   // Asset generation
   asset_generation:     15, // AI asset composition — ~$0.05
   image_creation:       15, // image gen (Flux/DALL-E) — ~$0.04

@@ -570,6 +570,18 @@ export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
 
   useEffect(() => { loadUsage(); }, [loadUsage]);
 
+  // Market Intelligence hand-off: "Create Content" on a finding pre-fills the
+  // generate prompt here instead of opening blank — same localStorage-draft
+  // pattern already used for the AI Strategist / Campaign Center hand-offs
+  // (see mrkt_prefill_prompt in chat.tsx, mrkt_campaign_draft in campaign-create.tsx).
+  useEffect(() => {
+    const raw = localStorage.getItem("mrkt_content_prefill");
+    if (!raw) return;
+    localStorage.removeItem("mrkt_content_prefill");
+    setPrompt(raw);
+    setTab("generate");
+  }, []);
+
   // Poll for generating assets
   useEffect(() => {
     const pending = assets.filter((a) => a.status === "generating");

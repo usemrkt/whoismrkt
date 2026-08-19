@@ -12,7 +12,7 @@
 
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { Compass, LayoutGrid, Users2, TrendingUp, Megaphone, Wand2, RefreshCw, Loader2 } from "lucide-react";
+import { Compass, LayoutGrid, Users2, TrendingUp, Megaphone, Wand2, Radar, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { C } from "@/lib/theme";
@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { to: "/marketing-hub/campaigns",label: "Campaign Center", icon: Megaphone,  exact: false },
   { to: "/marketing-hub/content",  label: "Content Studio",  icon: Wand2,      exact: false },
   { to: "/marketing-hub/growth",   label: "Growth",          icon: TrendingUp, exact: false },
+  { to: "/marketing-hub/intelligence", label: "Market Intelligence", icon: Radar, exact: false },
 ] as const;
 
 // ── Layout ────────────────────────────────────────────────────────────────────

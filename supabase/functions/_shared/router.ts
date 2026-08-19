@@ -106,6 +106,15 @@ export const ROUTES: Record<string, RouteConfig> = {
   creator_matching:      { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 2000, temperature: 0.40 },
   marketing_hub_briefing:{ primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 3000, temperature: 0.50 },
 
+  // ── Market Intelligence (Phase 5): retrieval → classification → synthesis.
+  // Retrieval uses Anthropic's web search tool — no OpenAI fallback, since
+  // OpenAI's equivalent requires the separate Responses API (a different
+  // endpoint than _callOpenAI uses today), so a failed search fails cleanly
+  // and retries at its next cadence window rather than silently degrading.
+  market_intelligence_search:    { primary: "anthropic", tier: "fast",     fallback: null,     maxTokens: 2048, temperature: 0.30 },
+  market_intelligence_classify:  { primary: "anthropic", tier: "fast",     fallback: "openai",  maxTokens: 1200, temperature: 0.20 },
+  market_intelligence_synthesis: { primary: "anthropic", tier: "balanced", fallback: "openai",  maxTokens: 3000, temperature: 0.50 },
+
   // ── Higgsfield: Content generation — image, video, assets ────────────────
   image_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },
   video_generate:        { primary: "higgsfield", tier: "fast",     fallback: null,        maxTokens: 0,    temperature: 0    },
@@ -141,6 +150,36 @@ export interface AIMessage {
   content: string;
 }
 
+// Anthropic server-side web search tool (verified live, Aug 2026:
+// https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool).
+// Anthropic-only — _callOpenAI has no equivalent (OpenAI's web search tool
+// requires the separate Responses API, not the /v1/chat/completions endpoint
+// used here).
+export interface AIWebSearchTool {
+  type:             "web_search_20250305";
+  name:             "web_search";
+  max_uses?:        number;
+  allowed_domains?: string[];
+  blocked_domains?: string[];
+}
+
+// A citation Claude attached to a piece of its generated text — real
+// provenance (url/title/quoted text), never invented. Maps directly onto
+// market_intelligence_findings.source_url/source_title/evidence.
+export interface AICitation {
+  url:       string;
+  title:     string;
+  citedText: string;
+}
+
+// A raw search result Claude's web_search tool returned (whether or not it
+// was ultimately cited in the final text).
+export interface AISearchResult {
+  url:     string;
+  title:   string;
+  pageAge: string | null;
+}
+
 export interface AICallOptions {
   feature:       string;
   messages:      AIMessage[];
@@ -148,6 +187,7 @@ export interface AICallOptions {
   userId?:       string;
   // deno-lint-ignore no-explicit-any
   supabase?:     any;      // service-role client for logging (optional)
+  tools?:        AIWebSearchTool[]; // per-call, since max_uses varies by search family
   overrides?: {
     maxTokens?:   number;
     temperature?: number;
@@ -165,6 +205,9 @@ export interface AICallResult {
   outputTokens:     number;
   estimatedCostUsd: number;
   fallbackUsed:     boolean;
+  webSearchRequests?: number;       // number of billed searches (Anthropic: $10/1000)
+  citations?:         AICitation[];
+  searchResults?:     AISearchResult[];
 }
 
 // ─── Provider call implementations ───────────────────────────────────────────
@@ -175,7 +218,11 @@ async function _callAnthropic(
   model:       string,
   maxTokens:   number,
   temperature: number,
-): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  tools?:      AIWebSearchTool[],
+): Promise<{
+  content: string; inputTokens: number; outputTokens: number;
+  webSearchRequests: number; citations: AICitation[]; searchResults: AISearchResult[];
+}> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
 
@@ -189,6 +236,7 @@ async function _callAnthropic(
     body: JSON.stringify({
       model, max_tokens: maxTokens, temperature, system,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      ...(tools?.length ? { tools } : {}),
     }),
   });
 
@@ -198,13 +246,34 @@ async function _callAnthropic(
   }
 
   const data = await res.json() as {
-    content: { type: string; text: string }[];
-    usage:   { input_tokens: number; output_tokens: number };
+    content: Array<
+      | { type: "text"; text: string; citations?: { type: string; url: string; title: string; cited_text: string }[] }
+      | { type: "server_tool_use"; input?: { query: string } }
+      | { type: "web_search_tool_result"; content?: { type: string; url: string; title: string; page_age: string | null }[] }
+      // deno-lint-ignore no-explicit-any
+      | { type: string; [key: string]: any }
+    >;
+    usage: { input_tokens: number; output_tokens: number; server_tool_use?: { web_search_requests: number } };
   };
+
+  const textBlocks = data.content.filter(
+    (b): b is Extract<typeof data.content[number], { type: "text" }> => b.type === "text",
+  );
+  const content   = textBlocks.map((b) => b.text).join("\n");
+  const citations: AICitation[] = textBlocks.flatMap(
+    (b) => (b.citations ?? []).map((c) => ({ url: c.url, title: c.title, citedText: c.cited_text })),
+  );
+  // deno-lint-ignore no-explicit-any
+  const searchResults: AISearchResult[] = data.content
+    .filter((b) => b.type === "web_search_tool_result")
+    .flatMap((b: any) => (b.content ?? []).map((r: any) => ({ url: r.url, title: r.title, pageAge: r.page_age ?? null })));
+
   return {
-    content:      data.content.find((b) => b.type === "text")?.text ?? "",
+    content,
     inputTokens:  data.usage?.input_tokens  ?? 0,
     outputTokens: data.usage?.output_tokens ?? 0,
+    webSearchRequests: data.usage?.server_tool_use?.web_search_requests ?? 0,
+    citations, searchResults,
   };
 }
 
@@ -252,7 +321,7 @@ async function _callOpenAI(
 // Handles: provider selection → primary call → fallback if needed → logging.
 
 export async function callAI(opts: AICallOptions): Promise<AICallResult> {
-  const { feature, messages, systemPrompt: sysOverride, userId, supabase, overrides } = opts;
+  const { feature, messages, systemPrompt: sysOverride, userId, supabase, overrides, tools } = opts;
 
   const route = ROUTES[feature];
   if (!route) throw new Error(`[MRKT AI] Unknown feature: "${feature}"`);
@@ -263,16 +332,19 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
 
   const dispatch = async (provider: Provider): Promise<{
     content: string; inputTokens: number; outputTokens: number; model: string;
+    webSearchRequests: number; citations: AICitation[]; searchResults: AISearchResult[];
   }> => {
     const cfg    = PROVIDERS[provider];
     const model  = cfg.models[tier];
     const system = sysOverride ?? systemPromptFor(provider);
 
-    let r: { content: string; inputTokens: number; outputTokens: number };
+    let r: { content: string; inputTokens: number; outputTokens: number; webSearchRequests: number; citations: AICitation[]; searchResults: AISearchResult[] };
     if (provider === "anthropic") {
-      r = await _callAnthropic(messages, system, model, maxTokens, temperature);
+      r = await _callAnthropic(messages, system, model, maxTokens, temperature, tools);
     } else if (provider === "openai") {
-      r = await _callOpenAI(messages, system, model, maxTokens, temperature);
+      if (tools?.length) throw new Error(`[MRKT AI] web search tools are Anthropic-only for "${feature}" — no OpenAI equivalent is wired`);
+      const or = await _callOpenAI(messages, system, model, maxTokens, temperature);
+      r = { ...or, webSearchRequests: 0, citations: [], searchResults: [] };
     } else {
       throw new Error(`Provider "${provider}" requires its dedicated edge function`);
     }
@@ -281,9 +353,13 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
 
   // Tier-accurate: a "balanced" OpenAI call is gpt-4o, not gpt-4o-mini, and
   // must be costed at gpt-4o's rate — see the costPer1k comment above.
-  const costOf = (p: Provider, inTok: number, outTok: number): number => {
+  // webSearchRequests adds Anthropic's $10/1000-searches rate on top of the
+  // normal token cost — verified live pricing (Aug 2026).
+  const costOf = (p: Provider, inTok: number, outTok: number, webSearchRequests = 0): number => {
     const rates = PROVIDERS[p].costPer1k[tier];
-    return (inTok / 1000) * rates.input + (outTok / 1000) * rates.output;
+    const tokenCost  = (inTok / 1000) * rates.input + (outTok / 1000) * rates.output;
+    const searchCost = (webSearchRequests / 1000) * 10;
+    return tokenCost + searchCost;
   };
 
   // Fire-and-forget observability log
@@ -321,7 +397,7 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
   try {
     const r           = await dispatch(primary);
     const latencyMs   = Date.now() - t0;
-    const cost        = costOf(primary, r.inputTokens, r.outputTokens);
+    const cost        = costOf(primary, r.inputTokens, r.outputTokens, r.webSearchRequests);
     const usedFallback = primary !== route.primary;
 
     log({ provider: primary, model: r.model, latencyMs, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cost, success: true, fallback: usedFallback });
@@ -330,6 +406,7 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
       content: r.content, provider: primary, model: r.model, feature,
       latencyMs, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
       estimatedCostUsd: cost, fallbackUsed: usedFallback,
+      webSearchRequests: r.webSearchRequests, citations: r.citations, searchResults: r.searchResults,
     };
   } catch (primaryErr) {
     const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
@@ -345,7 +422,7 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
     try {
       const r         = await dispatch(fb);
       const latencyMs = Date.now() - t0;
-      const cost      = costOf(fb, r.inputTokens, r.outputTokens);
+      const cost      = costOf(fb, r.inputTokens, r.outputTokens, r.webSearchRequests);
 
       log({ provider: fb, model: r.model, latencyMs, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cost, success: true, fallback: true, error: primaryMsg });
 
@@ -353,6 +430,7 @@ export async function callAI(opts: AICallOptions): Promise<AICallResult> {
         content: r.content, provider: fb, model: r.model, feature,
         latencyMs, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
         estimatedCostUsd: cost, fallbackUsed: true,
+        webSearchRequests: r.webSearchRequests, citations: r.citations, searchResults: r.searchResults,
       };
     } catch (fallbackErr) {
       const latencyMs   = Date.now() - t0;

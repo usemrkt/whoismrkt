@@ -36,6 +36,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, isRateLimited, STRICT_AI_RATE, requireAuth, jsonOk, jsonErr, AuthError } from "../_shared/security.ts";
 import { callAI } from "../_shared/router.ts";
 import { computeBusinessAnalytics } from "../_shared/analytics.ts";
+import { buildIntelligenceSummary } from "../_shared/marketIntelligence.ts";
 
 const CREDIT_COST = 10; // matches CREDIT_COST.growth_strategy / profile_audit in src/lib/aiCredits.ts — same "deep intelligence" tier
 
@@ -110,6 +111,7 @@ Deno.serve(async (req: Request) => {
     // computed inline here a second time.
     const [
       analytics,
+      intelSummary,
       { data: campaigns },
       { data: brand },
       { data: businessIntel },
@@ -119,6 +121,7 @@ Deno.serve(async (req: Request) => {
       { data: upcomingContent },
     ] = await Promise.all([
       computeBusinessAnalytics(serviceClient, user.id),
+      buildIntelligenceSummary(serviceClient, user.id),
       serviceClient.from("campaigns")
         .select("id, title, status, is_published, compensation_type, compensation_amount_fixed, compensation_budget_min, compensation_budget_max, deadline, created_at")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
@@ -215,16 +218,34 @@ Deno.serve(async (req: Request) => {
     // the user has already done — read fresh on every call regardless of
     // briefing cache state, so a cached page load never resurrects a
     // dismissed card.
+    // Widened (Phase 5) to also include Market Intelligence's own actionable
+    // rows (source='market_intelligence') — unlike the AI Strategist's rows,
+    // these aren't scoped to today's period_start (a Market Intelligence
+    // finding stays actionable until the user dismisses/completes it, not
+    // just for the day it was found), so they're fetched with a separate
+    // query rather than widening the .contains(meta, period_start) filter.
+    // The delete-then-reinsert scope below is untouched — it still only ever
+    // touches source='ai_strategist' rows, so this never collides.
     const fetchRecommendations = async () => {
-      const { data } = await serviceClient
-        .from("ai_recommendations")
-        .select("id, recommendation_type, title, explanation, action, priority, status, meta")
-        .eq("user_id", user.id)
-        .eq("source", "ai_strategist")
-        .eq("status", "active")
-        .contains("meta", { period_start: periodStart })
-        .order("created_at", { ascending: true });
-      return data ?? [];
+      const [{ data: strategistRows }, { data: marketIntelRows }] = await Promise.all([
+        serviceClient
+          .from("ai_recommendations")
+          .select("id, recommendation_type, title, explanation, action, priority, status, meta")
+          .eq("user_id", user.id)
+          .eq("source", "ai_strategist")
+          .eq("status", "active")
+          .contains("meta", { period_start: periodStart })
+          .order("created_at", { ascending: true }),
+        serviceClient
+          .from("ai_recommendations")
+          .select("id, recommendation_type, title, explanation, action, priority, status, meta")
+          .eq("user_id", user.id)
+          .eq("source", "market_intelligence")
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ]);
+      return [...(strategistRows ?? []), ...(marketIntelRows ?? [])];
     };
 
     // ── Cache check ────────────────────────────────────────────────────────
@@ -270,6 +291,17 @@ Deno.serve(async (req: Request) => {
       brand?.current_marketing_challenges ? `Current challenges: ${brand.current_marketing_challenges.slice(0, 200)}` : "",
       brand?.preferred_growth_channels ? `Preferred growth channels: ${brand.preferred_growth_channels}` : "",
       competitors ? `Named competitors: ${competitors}` : "",
+      // External market intelligence (Phase 5) — a controlled, capped summary
+      // of real, cited findings, never hundreds dumped into the prompt. Each
+      // line below carries its own evidence so the AI cites something real
+      // rather than paraphrasing vaguely.
+      ...(intelSummary ? [
+        `External market intelligence as of ${intelSummary.asOf} (${intelSummary.totalActiveFindings} active findings tracked):`,
+        ...intelSummary.competitorMoves.map((f) => `  Competitor move${f.competitor ? ` (${f.competitor})` : ""}: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
+        ...intelSummary.topOpportunities.map((f) => `  Market opportunity: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
+        ...intelSummary.topThreats.map((f) => `  Market threat: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
+        ...intelSummary.relevantTrends.map((f) => `  Market trend: ${f.title} — ${f.summary} [evidence: "${f.evidence}", confidence ${f.confidence}, ${f.freshness}]`),
+      ] : ["No external market intelligence gathered yet — Market Intelligence hasn't run for this business."]),
     ].filter(Boolean);
 
     const prompt = `You are the AI Marketing Team for a business on MRKT, producing today's briefing. Use ONLY the facts below — never invent numbers. You are writing AS the team — each department block should read like that specialist reporting in, not like a generic AI answer.
