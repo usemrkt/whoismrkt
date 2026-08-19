@@ -1,16 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // /marketing-hub — layout shell for the AI Marketing Team hub.
 // Business only. Fetches the daily briefing ONCE here and shares it with every
-// child section (Dashboard, Marketing Team, Growth) via context, so switching
-// sections never re-fetches. Children:
-//   index  → /marketing-hub          (executive Dashboard)
-//   team   → /marketing-hub/team     (AI Marketing Team org chart)
-//   growth → /marketing-hub/growth   (Growth opportunities)
+// child section (Dashboard, Marketing Team, Campaign Center, Content Studio,
+// Growth) via context, so switching sections never re-fetches. Children:
+//   index     → /marketing-hub           (executive Dashboard)
+//   team      → /marketing-hub/team      (AI Marketing Team org chart)
+//   campaigns → /marketing-hub/campaigns (Campaign Center)
+//   content   → /marketing-hub/content   (Content Studio, moved from /create)
+//   growth    → /marketing-hub/growth    (Growth opportunities)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { Compass, LayoutGrid, Users2, TrendingUp, Megaphone, RefreshCw, Loader2 } from "lucide-react";
+import { Compass, LayoutGrid, Users2, TrendingUp, Megaphone, Wand2, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { C } from "@/lib/theme";
@@ -28,6 +30,7 @@ const NAV_ITEMS = [
   { to: "/marketing-hub",          label: "Dashboard",       icon: LayoutGrid, exact: true },
   { to: "/marketing-hub/team",     label: "Marketing Team",  icon: Users2,     exact: false },
   { to: "/marketing-hub/campaigns",label: "Campaign Center", icon: Megaphone,  exact: false },
+  { to: "/marketing-hub/content",  label: "Content Studio",  icon: Wand2,      exact: false },
   { to: "/marketing-hub/growth",   label: "Growth",          icon: TrendingUp, exact: false },
 ] as const;
 

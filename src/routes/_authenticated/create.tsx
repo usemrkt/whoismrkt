@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -489,8 +489,15 @@ function BrandKitTab() {
 
 // ── Main Studio page ───────────────────────────────────────────────────────────
 
-function StudioPage() {
+// `embedded` is set when this component is rendered inside the Marketing Hub
+// (src/routes/_authenticated/marketing-hub.content.tsx) — the Hub's own
+// header already shows the section title, so this suppresses the standalone
+// "MRKT Studio" H1 block to avoid a redundant double header. Everything else
+// (tabs, generation, library, brand kit) is unchanged — this is the same
+// component businesses used at /create, just reached through the Hub now.
+export function StudioPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tab,              setTab]              = useState<"generate" | "library" | "brand">("generate");
   const [selectedPlatform, setSelectedPlatform] = useState("instagram_post");
   const [prompt,           setPrompt]           = useState("");
@@ -501,6 +508,21 @@ function StudioPage() {
   const [loadingConcepts,  setLoadingConcepts]  = useState(false);
   const [showConcepts,     setShowConcepts]     = useState(false);
   const [usage,            setUsage]            = useState<{ credits_used: number; credits_remaining: number; limit: number } | null>(null);
+
+  // Business accounts now live in the Marketing Hub — /create redirects them
+  // there (deep links still work, they just land inside the Hub) rather than
+  // showing the standalone page. Creators are untouched: no Marketing Hub
+  // exists for them, so no redirect fires. Skipped entirely when already
+  // rendered inside the Hub (embedded=true) to avoid a redirect loop.
+  useEffect(() => {
+    if (embedded || !user) return;
+    supabase.from("profiles").select("account_type, onboarding_path").eq("id", user.id).maybeSingle()
+      .then(({ data: p }) => {
+        const isBusiness = !!p && (p.account_type === "brand" || p.account_type === "business" || p.account_type === "agency"
+          || p.onboarding_path === "business_creator" || p.onboarding_path === "business_marketing");
+        if (isBusiness) navigate({ to: "/marketing-hub/content" });
+      });
+  }, [embedded, user, navigate]);
 
   const platform = PLATFORMS.find((p) => p.id === selectedPlatform)!;
 
@@ -659,8 +681,12 @@ function StudioPage() {
       <div className="studio-page-inner">
 
         {/* ── Page header ─────────────────────────────────────────────────── */}
+        {/* embedded=true (Marketing Hub) suppresses the title/description —
+            the Hub's own header already covers that — but keeps the credit
+            widget, since it's genuinely useful state, not chrome. */}
         <div style={{ marginBottom: 36 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: embedded ? "flex-end" : "space-between" }}>
+            {!embedded && (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{
@@ -693,6 +719,7 @@ function StudioPage() {
                 AI-powered content creation. Generate images and videos for any platform.
               </p>
             </div>
+            )}
             <div style={{
               padding:      "10px 16px",
               background:   C.surface,

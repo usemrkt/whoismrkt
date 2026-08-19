@@ -381,7 +381,6 @@ function MobileDrawer({
                 <NavSection label="Workspace">
                   <NavItem icon={Layers}        label="Projects"       to="/projects"             onClick={onClose} />
                   <NavItem icon={CalendarDays}  label="Calendar"       to="/content-planner"      onClick={onClose} />
-                  <NavItem icon={Wand2}         label="Studio"         to="/create"               onClick={onClose} />
                 </NavSection>
                 <NavSection label="Intelligence">
                   <NavItem icon={Sparkles}      label="AI Strategist"  to="/chat"       exact variant="ai" onClick={onClose} />
@@ -836,7 +835,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <NavSection label="Workspace">
                   <NavItem icon={Layers}        label={t("nav.projects")}       to="/projects"            />
                   <NavItem icon={CalendarDays}  label={t("nav.planner")}        to="/content-planner"     />
-                  <NavItem icon={Wand2}         label={t("nav.studio")}         to="/create"              />
                 </NavSection>
                 <NavSection label="Intelligence">
                   <NavItem icon={Sparkles}      label={t("nav.ai_strategist")}  to="/chat"      exact variant="ai" />
