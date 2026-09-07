@@ -106,6 +106,18 @@ export const ROUTES: Record<string, RouteConfig> = {
   creator_matching:      { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 2000, temperature: 0.40 },
   marketing_hub_briefing:{ primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 3000, temperature: 0.50 },
 
+  // ── Mission Foundation (Phase N): the CMO planning call must return a
+  // strictly schema-validated MissionPlan (missionSchemas.ts) — balanced
+  // tier, not deep, since this is decomposition into known tools, not
+  // open-ended research. Per-tool execution calls are small and cheap by
+  // design (mission-task-runner only ever asks for one short artifact at a
+  // time, never a multi-step plan of its own).
+  mission_planning:      { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 2200, temperature: 0.40 },
+  mission_strategy:      { primary: "anthropic",  tier: "balanced", fallback: "openai",    maxTokens: 1200, temperature: 0.50 },
+  mission_campaign_draft:{ primary: "anthropic",  tier: "fast",     fallback: "openai",    maxTokens: 900,  temperature: 0.55 },
+  mission_content_draft: { primary: "anthropic",  tier: "fast",     fallback: "openai",    maxTokens: 900,  temperature: 0.65 },
+  mission_outreach_draft:{ primary: "anthropic",  tier: "fast",     fallback: "openai",    maxTokens: 500,  temperature: 0.65 },
+
   // ── Market Intelligence (Phase 5): retrieval → classification → synthesis.
   // Retrieval uses Anthropic's web search tool — no OpenAI fallback, since
   // OpenAI's equivalent requires the separate Responses API (a different
