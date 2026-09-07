@@ -432,6 +432,25 @@ function statusColors(status: TaskStatus) {
   return { fg: C.aiBlue, bg: C.accentMuted, bdr: C.aiBlueBorder }; // ready | running | blocked
 }
 
+// A 'completed' task with output_data.prepared===true never actually
+// executed anything real (see missionTools.ts's hasExecutor:false tools) —
+// this must never look identical to a task that genuinely ran. Distinct
+// label AND color (amber, not green) so "done" and "prepared for you to do
+// yourself" are never confusable at a glance.
+function taskStatusDisplay(t: { status: TaskStatus; output_data: Record<string, unknown> | null }) {
+  const isPreparedOnly =
+    t.status === "completed" &&
+    t.output_data?.prepared === true &&
+    t.output_data?.executed === false;
+  if (isPreparedOnly) {
+    return {
+      label: "Prepared — action needed",
+      ...{ fg: C.amber, bg: C.amberMuted, bdr: C.amberBorder },
+    };
+  }
+  return { label: TASK_STATUS_LABEL[t.status], ...statusColors(t.status) };
+}
+
 function MissionRow({
   mission,
   selected,
@@ -650,51 +669,68 @@ function MissionDetailPanel({ missionId }: { missionId: string }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {tasks.map((t) => {
-          const { fg, bg, bdr } = statusColors(t.status);
+          const { label, fg, bg, bdr } = taskStatusDisplay(t);
+          const manualNote =
+            typeof t.output_data?.manual_action_required === "string"
+              ? t.output_data.manual_action_required
+              : null;
           return (
             <div
               key={t.id}
               style={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
+                flexDirection: "column",
+                gap: 4,
                 padding: "8px 12px",
                 borderRadius: 10,
                 background: C.raised,
                 border: `1px solid ${C.borderSubtle}`,
               }}
             >
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: C.textSecondary,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {t.title}
-                </div>
-                <div style={{ fontSize: 10.5, color: C.textQuaternary, marginTop: 1 }}>
-                  {agentName(t.agent_key)}
-                </div>
-              </div>
-              <span
+              <div
                 style={{
-                  fontSize: 9.5,
-                  fontWeight: 700,
-                  color: fg,
-                  background: bg,
-                  border: `1px solid ${bdr}`,
-                  borderRadius: 6,
-                  padding: "2px 6px",
-                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
                 }}
               >
-                {TASK_STATUS_LABEL[t.status]}
-              </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: C.textSecondary,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t.title}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: C.textQuaternary, marginTop: 1 }}>
+                    {agentName(t.agent_key)}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    color: fg,
+                    background: bg,
+                    border: `1px solid ${bdr}`,
+                    borderRadius: 6,
+                    padding: "2px 6px",
+                    flexShrink: 0,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+              {manualNote && (
+                <div style={{ fontSize: 11, color: C.textTertiary, lineHeight: 1.5 }}>
+                  {manualNote}
+                </div>
+              )}
             </div>
           );
         })}
