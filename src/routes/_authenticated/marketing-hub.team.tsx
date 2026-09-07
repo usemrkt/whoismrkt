@@ -38,6 +38,7 @@ import {
   useCreateMissionMutation,
   useDecideApprovalMutation,
   useCancelMissionMutation,
+  useAgentsQuery,
   missionProgress,
   TASK_STATUS_LABEL,
   MISSION_STATUS_LABEL,
@@ -497,6 +498,7 @@ function MissionRow({
 
 function MissionDetailPanel({ missionId }: { missionId: string }) {
   const { data, isPending } = useMissionDetailQuery(missionId);
+  const { data: agents } = useAgentsQuery();
   const decide = useDecideApprovalMutation(missionId);
   const cancelMission = useCancelMissionMutation();
 
@@ -505,6 +507,8 @@ function MissionDetailPanel({ missionId }: { missionId: string }) {
       <div style={{ fontSize: 12.5, color: C.textQuaternary, marginTop: 14 }}>Loading Mission…</div>
     );
   }
+
+  const agentName = (key: string) => agents?.find((a) => a.key === key)?.name ?? key;
 
   const { mission, tasks, approvals } = data;
   const progress = missionProgress(tasks);
@@ -661,7 +665,22 @@ function MissionDetailPanel({ missionId }: { missionId: string }) {
                 border: `1px solid ${C.borderSubtle}`,
               }}
             >
-              <span style={{ fontSize: 12, color: C.textSecondary }}>{t.title}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: C.textSecondary,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t.title}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.textQuaternary, marginTop: 1 }}>
+                  {agentName(t.agent_key)}
+                </div>
+              </div>
               <span
                 style={{
                   fontSize: 9.5,
