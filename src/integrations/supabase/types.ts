@@ -700,6 +700,94 @@ export type Database = {
         }
         Relationships: []
       }
+      business_facts: {
+        Row: {
+          agent_key: string | null
+          business_id: string
+          category: string
+          confidence: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          fact_key: string
+          id: string
+          metadata: Json
+          mission_id: string | null
+          observed_at: string
+          source_reference: Json
+          source_type: string
+          statement: string
+          status: string
+          structured_value: Json | null
+          superseded_by: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          business_id: string
+          category: string
+          confidence: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          fact_key: string
+          id?: string
+          metadata?: Json
+          mission_id?: string | null
+          observed_at?: string
+          source_reference?: Json
+          source_type: string
+          statement: string
+          status?: string
+          structured_value?: Json | null
+          superseded_by?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          business_id?: string
+          category?: string
+          confidence?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          fact_key?: string
+          id?: string
+          metadata?: Json
+          mission_id?: string | null
+          observed_at?: string
+          source_reference?: Json
+          source_type?: string
+          statement?: string
+          status?: string
+          structured_value?: Json | null
+          superseded_by?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_facts_agent_key_fkey"
+            columns: ["agent_key"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "business_facts_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_facts_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "business_facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_profiles: {
         Row: {
           avg_rating: number | null
@@ -3212,6 +3300,85 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_candidates: {
+        Row: {
+          agent_key: string | null
+          business_id: string
+          category: string
+          created_at: string
+          evidence: Json
+          fact_key: string
+          id: string
+          mission_id: string | null
+          promoted_fact_id: string | null
+          proposed_confidence: string
+          proposed_source_type: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          statement: string
+          status: string
+          structured_value: Json | null
+        }
+        Insert: {
+          agent_key?: string | null
+          business_id: string
+          category: string
+          created_at?: string
+          evidence?: Json
+          fact_key: string
+          id?: string
+          mission_id?: string | null
+          promoted_fact_id?: string | null
+          proposed_confidence: string
+          proposed_source_type: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          statement: string
+          status?: string
+          structured_value?: Json | null
+        }
+        Update: {
+          agent_key?: string | null
+          business_id?: string
+          category?: string
+          created_at?: string
+          evidence?: Json
+          fact_key?: string
+          id?: string
+          mission_id?: string | null
+          promoted_fact_id?: string | null
+          proposed_confidence?: string
+          proposed_source_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          statement?: string
+          status?: string
+          structured_value?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memory_candidates_agent_key_fkey"
+            columns: ["agent_key"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "memory_candidates_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memory_candidates_promoted_fact_id_fkey"
+            columns: ["promoted_fact_id"]
+            isOneToOne: false
+            referencedRelation: "business_facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachment_type: string | null
@@ -3494,6 +3661,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          learnings_processed_at: string | null
           objective: string
           objective_summary: string | null
           plan_schema_version: number
@@ -3509,6 +3677,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          learnings_processed_at?: string | null
           objective: string
           objective_summary?: string | null
           plan_schema_version?: number
@@ -3524,6 +3693,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          learnings_processed_at?: string | null
           objective?: string
           objective_summary?: string | null
           plan_schema_version?: number
@@ -4782,6 +4952,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      decide_memory_candidate: {
+        Args: { p_candidate_id: string; p_decision: string }
+        Returns: string
+      }
       decide_mission_approval: {
         Args: { p_approval_id: string; p_decision: string }
         Returns: {
@@ -4985,6 +5159,17 @@ export type Database = {
         }
         Returns: Json
       }
+      submit_user_stated_fact: {
+        Args: {
+          p_business_id: string
+          p_category: string
+          p_expires_at?: string
+          p_fact_key: string
+          p_statement: string
+          p_structured_value?: Json
+        }
+        Returns: string
+      }
       upsert_ai_recommendation: {
         Args: {
           p_action_label?: string
@@ -4996,6 +5181,23 @@ export type Database = {
           p_title: string
           p_type: string
           p_user_id: string
+        }
+        Returns: string
+      }
+      upsert_business_fact_internal: {
+        Args: {
+          p_agent_key: string
+          p_business_id: string
+          p_category: string
+          p_confidence: string
+          p_created_by: string
+          p_expires_at: string
+          p_fact_key: string
+          p_mission_id: string
+          p_source_reference: Json
+          p_source_type: string
+          p_statement: string
+          p_structured_value: Json
         }
         Returns: string
       }

@@ -23,6 +23,7 @@ import {
   Lock,
   Rocket,
   Loader2,
+  Brain,
 } from "lucide-react";
 import { C } from "@/lib/theme";
 import {
@@ -32,6 +33,15 @@ import {
   type Department,
 } from "@/lib/marketingHub";
 import { MarketingHubErrorFallback } from "@/components/MarketingHubErrorBoundary";
+import {
+  useBusinessFactsQuery,
+  usePendingCandidatesQuery,
+  useSubmitFactMutation,
+  useDecideCandidateMutation,
+  SOURCE_LABEL,
+  CATEGORY_LABEL,
+  type FactCategory,
+} from "@/lib/businessBrain";
 import {
   useMissionsQuery,
   useMissionDetailQuery,
@@ -411,6 +421,7 @@ function TeamSection() {
       )}
 
       <MissionsPanel />
+      <BusinessBrainPanel />
     </div>
   );
 }
@@ -841,6 +852,263 @@ function MissionsPanel() {
       </div>
 
       {selectedId && <MissionDetailPanel missionId={selectedId} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Business Brain (Phase O) — a restrained, premium view of what MRKT
+// currently understands about the business, with honest provenance on every
+// item (spec §21/§22 — "how does MRKT know this?"). Never a database admin
+// screen: only active facts + the small set of pending learnings genuinely
+// worth a decision are surfaced, nothing else.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FACT_CATEGORIES: FactCategory[] = [
+  "constraints",
+  "audience",
+  "brand",
+  "products",
+  "competitors",
+  "marketing",
+  "performance",
+  "preference",
+];
+
+function confidenceColor(c: "verified" | "high" | "medium" | "low") {
+  if (c === "verified" || c === "high") return C.green;
+  if (c === "medium") return C.amber;
+  return C.textQuaternary;
+}
+
+function BusinessBrainPanel() {
+  const { data: facts, isPending: factsLoading } = useBusinessFactsQuery();
+  const { data: candidates } = usePendingCandidatesQuery();
+  const submitFact = useSubmitFactMutation();
+  const decide = useDecideCandidateMutation();
+
+  const [category, setCategory] = useState<FactCategory>("audience");
+  const [factKey, setFactKey] = useState("");
+  const [statement, setStatement] = useState("");
+
+  function handleSubmit() {
+    if (statement.trim().length < 8 || !factKey.trim() || submitFact.isPending) return;
+    submitFact.mutate(
+      { category, factKey: factKey.trim(), statement: statement.trim() },
+      {
+        onSuccess: () => {
+          setStatement("");
+          setFactKey("");
+        },
+      },
+    );
+  }
+
+  const grouped = FACT_CATEGORIES.map((cat) => ({
+    category: cat,
+    items: (facts ?? []).filter((f) => f.category === cat),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 24, borderTop: `1px solid ${C.borderSubtle}` }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+        <Brain size={16} style={{ color: C.aiBlue }} />
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: C.textPrimary }}>Business Brain</div>
+      </div>
+      <p style={{ fontSize: 12.5, color: C.textTertiary, margin: "0 0 14px", lineHeight: 1.55 }}>
+        What MRKT currently understands about your business, and where each piece came from. Tell it
+        something once — every agent uses it from then on.
+      </p>
+
+      {candidates && candidates.length > 0 && (
+        <div style={{ marginBottom: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+          {candidates.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                padding: "12px 14px",
+                borderRadius: 12,
+                background: C.amberMuted,
+                border: `1px solid ${C.amberBorder}`,
+              }}
+            >
+              <div
+                style={{ fontSize: 12.5, fontWeight: 600, color: C.textPrimary, marginBottom: 3 }}
+              >
+                {c.statement}
+              </div>
+              <div style={{ fontSize: 11, color: C.textTertiary, marginBottom: 10 }}>
+                {SOURCE_LABEL[c.proposed_source_type]} · {CATEGORY_LABEL[c.category]} · worth
+                remembering?
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => decide.mutate({ candidateId: c.id, decision: "accepted" })}
+                  disabled={decide.isPending}
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: "white",
+                    background: C.green,
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "5px 12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remember this
+                </button>
+                <button
+                  onClick={() => decide.mutate({ candidateId: c.id, decision: "rejected" })}
+                  disabled={decide.isPending}
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: C.textSecondary,
+                    background: "none",
+                    border: `1px solid ${C.borderNormal}`,
+                    borderRadius: 8,
+                    padding: "5px 12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  No, dismiss
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as FactCategory)}
+          style={{
+            fontSize: 12.5,
+            padding: "9px 10px",
+            borderRadius: 10,
+            border: `1px solid ${C.borderNormal}`,
+            background: C.raised,
+            color: C.textPrimary,
+          }}
+        >
+          {FACT_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABEL[c]}
+            </option>
+          ))}
+        </select>
+        <input
+          value={factKey}
+          onChange={(e) => setFactKey(e.target.value)}
+          placeholder="short label, e.g. primary_audience"
+          style={{
+            width: 170,
+            fontSize: 12.5,
+            padding: "9px 10px",
+            borderRadius: 10,
+            border: `1px solid ${C.borderNormal}`,
+            background: C.raised,
+            color: C.textPrimary,
+          }}
+        />
+        <input
+          value={statement}
+          onChange={(e) => setStatement(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSubmit();
+          }}
+          placeholder="Tell MRKT something, e.g. our primary audience is women 25–40 in the UAE"
+          style={{
+            flex: 1,
+            minWidth: 220,
+            fontSize: 12.5,
+            padding: "9px 12px",
+            borderRadius: 10,
+            border: `1px solid ${C.borderNormal}`,
+            background: C.raised,
+            color: C.textPrimary,
+          }}
+        />
+        <button
+          onClick={handleSubmit}
+          disabled={submitFact.isPending || statement.trim().length < 8 || !factKey.trim()}
+          style={{
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: "white",
+            background: C.aiBlue,
+            border: "none",
+            borderRadius: 10,
+            padding: "9px 16px",
+            cursor: "pointer",
+            flexShrink: 0,
+            opacity:
+              submitFact.isPending || statement.trim().length < 8 || !factKey.trim() ? 0.6 : 1,
+          }}
+        >
+          {submitFact.isPending ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {submitFact.isError && (
+        <div style={{ fontSize: 12, color: C.red, marginBottom: 12 }}>
+          {(submitFact.error as Error).message}
+        </div>
+      )}
+
+      {factsLoading && (
+        <div style={{ fontSize: 12.5, color: C.textQuaternary }}>Loading Business Brain…</div>
+      )}
+      {!factsLoading && grouped.length === 0 && (
+        <div style={{ fontSize: 12.5, color: C.textQuaternary, padding: "12px 0" }}>
+          MRKT doesn't know anything beyond your Brand Knowledge yet — tell it something above, or
+          run a Mission.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {grouped.map((g) => (
+          <div key={g.category}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: C.textQuaternary,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: 6,
+              }}
+            >
+              {CATEGORY_LABEL[g.category]}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {g.items.map((f) => (
+                <div
+                  key={f.id}
+                  style={{
+                    padding: "9px 13px",
+                    borderRadius: 10,
+                    background: C.raised,
+                    border: `1px solid ${C.borderSubtle}`,
+                  }}
+                >
+                  <div style={{ fontSize: 12.5, color: C.textSecondary, marginBottom: 3 }}>
+                    {f.statement}
+                  </div>
+                  <div
+                    className="flex items-center gap-1"
+                    style={{ fontSize: 10.5, color: C.textQuaternary }}
+                  >
+                    <span style={{ color: confidenceColor(f.confidence) }}>●</span>
+                    {SOURCE_LABEL[f.source_type]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
