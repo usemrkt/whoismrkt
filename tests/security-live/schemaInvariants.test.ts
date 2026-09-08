@@ -242,3 +242,75 @@ describe("Phase N — mission-task-runner cron is scheduled with vault-based aut
     expect(rows[0].command).toContain("vault.decrypted_secrets");
   });
 });
+
+describe("Phase O — Business Brain tables/RLS (regression guard)", () => {
+  it("business_facts and memory_candidates have row-level security enabled", () => {
+    const rows = liveSql<{ relname: string; relrowsecurity: boolean }>(
+      "select relname, relrowsecurity from pg_class where relname in ('business_facts','memory_candidates') and relnamespace='public'::regnamespace;",
+    );
+    const byName = new Map(rows.map((r) => [r.relname, r.relrowsecurity]));
+    expect(byName.get("business_facts")).toBe(true);
+    expect(byName.get("memory_candidates")).toBe(true);
+  });
+
+  it("both tables have SELECT-only policies for authenticated — no client mutation path exists outside the RPCs", () => {
+    const rows = liveSql<{ tablename: string; cmd: string }>(
+      "select tablename, cmd from pg_policies where schemaname='public' and tablename in ('business_facts','memory_candidates');",
+    );
+    for (const r of rows) expect(r.cmd, `${r.tablename} should have no non-SELECT policy`).toBe("SELECT");
+  });
+
+  it("only one active row per (business_id, category, fact_key) is enforceable — the partial unique index exists", () => {
+    const rows = liveSql<{ indexdef: string }>(
+      "select indexdef from pg_indexes where schemaname='public' and tablename='business_facts' and indexname='business_facts_active_slot_unique';",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].indexdef).toContain("WHERE (status = 'active'::text)");
+  });
+});
+
+describe("Phase O — the nested-SECURITY-DEFINER trap (regression guard for the exact class of bug Phase N found)", () => {
+  it("upsert_business_fact_internal has NO EXECUTE grant to anon or authenticated — protected purely by GRANT, safe for nested calls regardless of caller chain", () => {
+    const rows = liveSql<{ grantee: string }>(
+      `select r.rolname as grantee from pg_proc p
+       join pg_namespace n on n.oid=p.pronamespace
+       join aclexplode(p.proacl) a on true join pg_roles r on r.oid=a.grantee
+       where n.nspname='public' and p.proname='upsert_business_fact_internal' and r.rolname in ('anon','authenticated');`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("upsert_business_fact_internal carries no internal auth.role()/auth.uid() check — its source_type/confidence must come from its caller's own validated decision, not be re-derived from the top-level session role (the exact mistake that broke decide_mission_approval in Phase N)", () => {
+    const rows = liveSql<{ prosrc: string }>(
+      "select prosrc from pg_proc where proname='upsert_business_fact_internal' and pronamespace='public'::regnamespace;",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].prosrc).not.toMatch(/auth\.role\(\)/);
+  });
+
+  it("submit_user_stated_fact and decide_memory_candidate grant authenticated but never anon", () => {
+    const rows = liveSql<{ proname: string; grantee: string }>(
+      `select p.proname, r.rolname as grantee from pg_proc p
+       join pg_namespace n on n.oid=p.pronamespace
+       join aclexplode(p.proacl) a on true join pg_roles r on r.oid=a.grantee
+       where n.nspname='public' and p.proname in ('submit_user_stated_fact','decide_memory_candidate');`,
+    );
+    const byFn = new Map<string, string[]>();
+    for (const r of rows) byFn.set(r.proname, [...(byFn.get(r.proname) ?? []), r.grantee]);
+    expect(byFn.get("submit_user_stated_fact")).toContain("authenticated");
+    expect(byFn.get("submit_user_stated_fact")).not.toContain("anon");
+    expect(byFn.get("decide_memory_candidate")).toContain("authenticated");
+    expect(byFn.get("decide_memory_candidate")).not.toContain("anon");
+  });
+
+  it("every Phase O SECURITY DEFINER function pins search_path", () => {
+    const rows = liveSql<{ proname: string; proconfig: string[] | null }>(
+      `select proname, proconfig from pg_proc where pronamespace='public'::regnamespace
+       and proname in ('upsert_business_fact_internal','submit_user_stated_fact','decide_memory_candidate');`,
+    );
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect((r.proconfig ?? []).some((c) => c.startsWith("search_path=")), `${r.proname} should pin search_path`).toBe(true);
+    }
+  });
+});

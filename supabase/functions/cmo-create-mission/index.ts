@@ -32,6 +32,7 @@ import { MissionPlanSchema, type MissionPlan } from "../_shared/missionSchemas.t
 import { TOOL_REGISTRY } from "../_shared/missionTools.ts";
 import { buildMissionTaskRows } from "../_shared/missionPlan.ts";
 import { AGENT_KEYS } from "../_shared/agentRegistry.ts";
+import { getBusinessBrainContext, formatBusinessBrainForPrompt } from "../_shared/businessBrain.ts";
 
 const CREDIT_COST = 8; // between marketing_hub_briefing (10) and a single content-gen call — one planning call, no research attached yet
 
@@ -94,11 +95,13 @@ Deno.serve(async (req: Request) => {
       .upsert({ business_id: user.id }, { onConflict: "business_id", ignoreDuplicates: true });
     if (policyErr) console.error("[cmo-create-mission] business_autonomy_policy upsert failed:", user.id, policyErr);
 
-    const { data: brand } = await serviceClient
-      .from("brand_knowledge")
-      .select("brand_description, target_audience, competitors, marketing_goals, current_marketing_challenges")
-      .eq("business_user_id", user.id)
-      .maybeSingle();
+    let brainCtx;
+    try {
+      brainCtx = await getBusinessBrainContext(serviceClient, user.id, "cmo");
+    } catch (e) {
+      console.error("[cmo-create-mission] Business Brain context load failed:", e);
+      return jsonErr("Couldn't load your business context. Please try again shortly.", req, 502);
+    }
 
     const { allowed, remaining } = await consumeCredits(serviceClient, user.id, CREDIT_COST);
     if (!allowed) {
@@ -107,7 +110,7 @@ Deno.serve(async (req: Request) => {
 
     const prompt = `${wrapUntrustedBlock("business_objective", objective)}
 
-${wrapUntrustedBlock("brand_knowledge", brand ? JSON.stringify(brand) : "No Brand Knowledge on file yet.")}
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brainCtx))}
 
 Available agents (use these exact keys for "agent_key"): ${AGENT_KEYS.join(", ")}.
 

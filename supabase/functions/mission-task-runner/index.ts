@@ -32,6 +32,8 @@ import {
   StrategyOutputSchema, CampaignDraftOutputSchema, ContentIdeasOutputSchema, OutreachCopyOutputSchema,
 } from "../_shared/missionSchemas.ts";
 import { toolDef, type ToolName } from "../_shared/missionTools.ts";
+import { getBusinessBrainContext, formatBusinessBrainForPrompt } from "../_shared/businessBrain.ts";
+import { processMissionLearnings } from "../_shared/missionLearning.ts";
 
 const BUDGET_FEATURE = "mission_task";
 const CLAIM_LIMIT = 5;
@@ -63,27 +65,30 @@ async function missionObjective(supabase: SupabaseClient, missionId: string): Pr
 // complete_mission_task handle it). None of these ever touch a table outside
 // what its own tool description promises. ──────────────────────────────────
 
+// Business Brain is now the single source for canonical + evolving context
+// (Phase O) — this tool's own job shrinks to "confirm the Brain loaded and
+// hand its CMO-purpose view forward" rather than assembling reads itself.
+// Zero AI cost, unchanged from Phase N.
 async function execGatherContext(supabase: SupabaseClient, task: MissionTaskRow) {
-  const [{ data: brand }, { data: health }, { data: findings }] = await Promise.all([
-    supabase.from("brand_knowledge").select("brand_description, target_audience, competitors, marketing_goals, current_marketing_challenges").eq("business_user_id", task.business_id).maybeSingle(),
-    supabase.from("marketing_health_snapshots").select("period_start, snapshot").eq("business_id", task.business_id).order("period_start", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("market_intelligence_findings").select("title, summary, category, relevance").eq("business_id", task.business_id).eq("status", "active").order("created_at", { ascending: false }).limit(5),
-  ]);
+  const ctx = await getBusinessBrainContext(supabase, task.business_id, "cmo");
   return {
-    brand_knowledge: brand ?? null,
-    marketing_health: health?.snapshot?.health ?? null,
-    recent_findings: findings ?? [],
+    brand_knowledge: ctx.brand,
+    marketing_health_score: ctx.recentHealthScore,
+    recent_findings: ctx.recentFindings,
+    constraints: ctx.constraints.map((c) => c.statement),
+    business_facts_considered: ctx.facts.length,
+    unavailable_sources: ctx.unavailableSources,
   };
 }
 
 async function execBuildStrategy(supabase: SupabaseClient, task: MissionTaskRow) {
-  const [context, mission] = await Promise.all([
-    siblingOutput(supabase, task.mission_id, "gather_context"),
+  const [brain, mission] = await Promise.all([
+    getBusinessBrainContext(supabase, task.business_id, "cmo"),
     missionObjective(supabase, task.mission_id),
   ]);
   const prompt = `Mission objective: ${wrapUntrustedBlock("objective", mission.objective)}
 
-Gathered business context: ${wrapUntrustedBlock("context", context ? JSON.stringify(context) : "none gathered yet")}
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brain))}
 
 This step: ${wrapUntrustedBlock("step_instructions", task.title)}${task.input_data && Object.keys(task.input_data).length ? `\nStep hints: ${wrapUntrustedBlock("step_input", JSON.stringify(task.input_data))}` : ""}
 
@@ -99,16 +104,19 @@ Return ONLY: { "headline": string, "pillars": string[] (1-6), "recommended_next_
 }
 
 async function execDraftCampaign(supabase: SupabaseClient, task: MissionTaskRow) {
-  const [strategy, mission, { data: profile }] = await Promise.all([
+  const [strategy, mission, brain, { data: profile }] = await Promise.all([
     siblingOutput(supabase, task.mission_id, "build_strategy"),
     missionObjective(supabase, task.mission_id),
+    getBusinessBrainContext(supabase, task.business_id, "performance"),
     supabase.from("profiles").select("name").eq("id", task.business_id).maybeSingle(),
   ]);
   const prompt = `Mission objective: ${wrapUntrustedBlock("objective", mission.objective)}
 
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brain))}
+
 Strategy so far: ${wrapUntrustedBlock("strategy", strategy ? JSON.stringify(strategy) : "none yet — use the objective directly")}
 
-Draft ONE campaign brief for this business to review as a DRAFT (it will not be published automatically). Return ONLY:
+Draft ONE campaign brief for this business to review as a DRAFT (it will not be published automatically). Respect every listed constraint exactly — never propose anything a constraint above forbids. Return ONLY:
 { "title": string, "description": string, "campaign_goal": string, "compensation_type": "paid"|"gifted"|"affiliate"|"revenue_share"|"unpaid", "suggested_niches": string[] (0-6) }`;
 
   const result = await callAI({ feature: "mission_campaign_draft", messages: [{ role: "user", content: prompt }], systemPrompt: MISSION_PERSONA, userId: task.business_id, supabase });
@@ -136,15 +144,18 @@ Draft ONE campaign brief for this business to review as a DRAFT (it will not be 
 }
 
 async function execDraftContentIdeas(supabase: SupabaseClient, task: MissionTaskRow) {
-  const [strategy, mission] = await Promise.all([
+  const [strategy, mission, brain] = await Promise.all([
     siblingOutput(supabase, task.mission_id, "build_strategy"),
     missionObjective(supabase, task.mission_id),
+    getBusinessBrainContext(supabase, task.business_id, "content"),
   ]);
   const prompt = `Mission objective: ${wrapUntrustedBlock("objective", mission.objective)}
 
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brain))}
+
 Strategy so far: ${wrapUntrustedBlock("strategy", strategy ? JSON.stringify(strategy) : "none yet — use the objective directly")}
 
-Suggest 3-8 concrete content ideas supporting this Mission. Return ONLY:
+Suggest 3-8 concrete content ideas supporting this Mission. Respect every listed constraint exactly. Return ONLY:
 { "items": [{ "platform": string, "content_type": string, "idea": string }] }`;
 
   const result = await callAI({ feature: "mission_content_draft", messages: [{ role: "user", content: prompt }], systemPrompt: MISSION_PERSONA, userId: task.business_id, supabase });
@@ -175,15 +186,18 @@ Suggest 3-8 concrete content ideas supporting this Mission. Return ONLY:
 }
 
 async function execDraftOutreachCopy(supabase: SupabaseClient, task: MissionTaskRow) {
-  const [strategy, mission] = await Promise.all([
+  const [strategy, mission, brain] = await Promise.all([
     siblingOutput(supabase, task.mission_id, "build_strategy"),
     missionObjective(supabase, task.mission_id),
+    getBusinessBrainContext(supabase, task.business_id, "copy"),
   ]);
   const prompt = `Mission objective: ${wrapUntrustedBlock("objective", mission.objective)}
 
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brain))}
+
 Strategy so far: ${wrapUntrustedBlock("strategy", strategy ? JSON.stringify(strategy) : "none yet — use the objective directly")}
 
-Draft ONE short outreach message a business could send a matched creator — this is a DRAFT for the business to review and send themselves; it will not be sent automatically. Return ONLY:
+Draft ONE short outreach message a business could send a matched creator — this is a DRAFT for the business to review and send themselves; it will not be sent automatically. Respect every listed constraint and match the stated brand voice/tone exactly. Return ONLY:
 { "subject": string (optional), "message": string }`;
 
   const result = await callAI({ feature: "mission_outreach_draft", messages: [{ role: "user", content: prompt }], systemPrompt: MISSION_PERSONA, userId: task.business_id, supabase });
@@ -307,7 +321,25 @@ Deno.serve(async (req: Request) => {
       await runTask(supabase, workerId, task);
     }
 
-    return jsonOk({ reclaimed_leases: reclaimed ?? 0, sensitive_approvals_opened: opened ?? 0, tasks_claimed: tasks.length }, req);
+    // Phase O: extract learnings from any Mission that reached a terminal
+    // state and hasn't been processed yet. Small bounded batch, same
+    // dispatcher shape as everything else in this tick — never blocks task
+    // execution above, runs after.
+    let learningsProcessed = 0;
+    const { data: terminalMissions } = await supabase
+      .from("missions").select("id, business_id, objective_summary")
+      .in("status", ["completed", "failed"]).is("learnings_processed_at", null).limit(5);
+    for (const mission of terminalMissions ?? []) {
+      try {
+        const { candidatesCreated } = await processMissionLearnings(supabase, mission);
+        learningsProcessed++;
+        if (candidatesCreated > 0) console.log(`[mission-task-runner] mission ${mission.id}: ${candidatesCreated} learning candidate(s) created`);
+      } catch (e) {
+        console.error(`[mission-task-runner] learning extraction failed for mission ${mission.id}:`, e);
+      }
+    }
+
+    return jsonOk({ reclaimed_leases: reclaimed ?? 0, sensitive_approvals_opened: opened ?? 0, tasks_claimed: tasks.length, missions_learnings_processed: learningsProcessed }, req);
   } catch (e) {
     console.error("[mission-task-runner] unhandled error:", e);
     return jsonErr("Internal error", req, 500);
