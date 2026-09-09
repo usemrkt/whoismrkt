@@ -63,7 +63,13 @@ export interface BusinessFact {
 // an agent-identity concern).
 export type AgentPurpose =
   | "cmo" | "growth" | "content" | "social" | "creative"
-  | "copy" | "performance" | "intelligence" | "lifecycle" | "analyst";
+  | "copy" | "performance" | "intelligence" | "lifecycle" | "analyst"
+  // Phase P — the Meta Ads Specialist's own dedicated retrieval purpose
+  // (spec §18's "meta_ads_strategy" example). Deliberately its own entry,
+  // not an alias for 'performance' — a platform specialist needs
+  // brand/product context (for creative/copy requirements) that the
+  // cross-channel Performance Marketing Lead's own purpose doesn't pull.
+  | "meta_ads";
 
 // Which business_facts categories matter for each purpose. 'constraints' is
 // deliberately omitted from every list below — it's unconditionally
@@ -79,6 +85,11 @@ const PURPOSE_CATEGORIES: Record<AgentPurpose, BusinessFactCategory[]> = {
   intelligence: ["competitors", "marketing"],
   lifecycle:    ["audience", "marketing", "performance"],
   analyst:      ["performance", "marketing"],
+  // brand/products — needed for creative + copy requirements the specialist
+  // hands to Creative Director/Copywriter (spec §24); audience/competitors —
+  // targeting + positioning; marketing/performance/preference — budget
+  // constraints, prior campaign learnings, founder preferences (spec §18/19).
+  meta_ads:     ["brand", "audience", "products", "competitors", "marketing", "performance", "preference"],
 };
 
 const SOURCE_PRIORITY: Record<FactSourceType, number> = {

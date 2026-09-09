@@ -41,6 +41,7 @@ export const TOOL_NAMES = [
   "invite_creator_to_campaign",
   "launch_campaign",
   "request_paid_promotion",
+  "meta_prepare_campaign_plan",
 ] as const;
 
 export type ToolName = typeof TOOL_NAMES[number];
@@ -101,6 +102,20 @@ export const TOOL_REGISTRY: Record<ToolName, ToolDef> = {
     riskLevel: "sensitive", hasExecutor: false, estimatedCostUsd: 0,
     description: "Any paid-media spend requires explicit budget sign-off and, today, no ad-platform connector exists to execute it.",
     manualActionNote: "No ad connector is live yet — this step is recorded as a recommendation only, not executed. See Market Intelligence / Growth for manual next steps.",
+  },
+  // Phase P — the Meta Ads Specialist's genuine, safe, internal deliverable.
+  // 'safe'/hasExecutor:true because producing a structured plan and writing
+  // one meta_campaign_plans row is exactly as internal/reversible as
+  // draft_campaign producing a campaigns draft row — nothing external is
+  // touched. It is NOT the same thing as executing that plan on Meta; there
+  // is no tool anywhere in this registry that does that (see missionTools.ts
+  // header and metaAdsTools.ts for the future write-tool contracts, none of
+  // which have an executor here).
+  meta_prepare_campaign_plan: {
+    name: "meta_prepare_campaign_plan", label: "Prepare a Meta Ads campaign plan", agentKey: "meta_ads",
+    riskLevel: "safe", hasExecutor: true, estimatedCostUsd: 0.04,
+    description: "Produces one real meta_campaign_plans row — objective, funnel stage, campaign/ad-set architecture, audience strategy, budget proposal, placements, creative + copy requirements, a test matrix, and KPI targets. Entirely internal and reversible; status is always 'prepared' — no Meta account is touched, no campaign is created or launched.",
+    manualActionNote: "Meta Ads is not connected. This plan is expert-level prep work — review it, then execute it yourself in Ads Manager (or connect Meta once that connector exists) when you're ready.",
   },
 };
 

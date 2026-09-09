@@ -314,3 +314,123 @@ describe("Phase O — the nested-SECURITY-DEFINER trap (regression guard for the
     }
   });
 });
+
+describe("Phase P — proactive operations: RLS, worker-only grants, cron, prepare-only guarantee", () => {
+  it("marketing_signals, marketing_findings, meta_campaign_plans all have row-level security enabled", () => {
+    const rows = liveSql<{ relname: string; relrowsecurity: boolean }>(
+      `select relname, relrowsecurity from pg_class where relname in ('marketing_signals','marketing_findings','meta_campaign_plans') and relnamespace='public'::regnamespace;`,
+    );
+    expect(rows).toHaveLength(3);
+    for (const r of rows) expect(r.relrowsecurity, `${r.relname} should have RLS enabled`).toBe(true);
+  });
+
+  it("all three tables have SELECT-only policies for authenticated — no client mutation path exists outside the internal RPCs", () => {
+    const rows = liveSql<{ tablename: string; cmd: string }>(
+      "select tablename, cmd from pg_policies where schemaname='public' and tablename in ('marketing_signals','marketing_findings','meta_campaign_plans');",
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.cmd, `${r.tablename} should have no non-SELECT policy`).toBe("SELECT");
+  });
+
+  it("exactly one ACTIVE signal per (business_id, dedupe_key) is enforceable — the partial unique index exists", () => {
+    const rows = liveSql<{ indexdef: string }>(
+      "select indexdef from pg_indexes where schemaname='public' and tablename='marketing_signals' and indexname='marketing_signals_active_dedupe_unique';",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].indexdef).toContain("WHERE (status = 'active'::text)");
+  });
+
+  it("meta_campaign_plans.status can only ever be 'prepared' — the schema itself enforces 'never claim launched', not just the UI", () => {
+    const rows = liveSql<{ consrc: string }>(
+      `select pg_get_constraintdef(oid) as consrc from pg_constraint
+       where conrelid = 'public.meta_campaign_plans'::regclass and contype='c' and pg_get_constraintdef(oid) ilike '%status%';`,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.consrc.includes("'prepared'"))).toBe(true);
+  });
+
+  it("none of the 4 worker-only Phase P functions grant EXECUTE to anon or authenticated — same class of bug Phase N found live", () => {
+    const workerFns = ["upsert_marketing_signal_internal", "resolve_marketing_signal_internal", "create_marketing_finding_internal", "create_proactive_recommendation_internal"];
+    const rows = liveSql<{ proname: string; grantee: string }>(
+      `select p.proname, r.rolname as grantee from pg_proc p
+       join pg_namespace n on n.oid=p.pronamespace
+       join aclexplode(p.proacl) a on true join pg_roles r on r.oid=a.grantee
+       where n.nspname='public' and p.proname = any(array['upsert_marketing_signal_internal','resolve_marketing_signal_internal','create_marketing_finding_internal','create_proactive_recommendation_internal'])
+       and r.rolname in ('anon','authenticated');`,
+    );
+    expect(rows, `unexpected client grants: ${JSON.stringify(rows)}`).toEqual([]);
+    // Sanity: confirm all 4 functions actually exist (an empty grant list for
+    // a MISSING function would otherwise pass this test vacuously).
+    const existRows = liveSql<{ proname: string }>(
+      `select proname from pg_proc where pronamespace='public'::regnamespace and proname = any(array['upsert_marketing_signal_internal','resolve_marketing_signal_internal','create_marketing_finding_internal','create_proactive_recommendation_internal']);`,
+    );
+    expect(existRows.map((r) => r.proname).sort()).toEqual(workerFns.slice().sort());
+  });
+
+  it("dismiss_recommendation grants authenticated but never anon", () => {
+    const rows = liveSql<{ grantee: string }>(
+      `select r.rolname as grantee from pg_proc p
+       join pg_namespace n on n.oid=p.pronamespace
+       join aclexplode(p.proacl) a on true join pg_roles r on r.oid=a.grantee
+       where n.nspname='public' and p.proname='dismiss_recommendation';`,
+    );
+    const grantees = rows.map((r) => r.grantee);
+    expect(grantees).toContain("authenticated");
+    expect(grantees).not.toContain("anon");
+  });
+
+  it("every Phase P SECURITY DEFINER function pins search_path", () => {
+    const fns = ["upsert_marketing_signal_internal", "resolve_marketing_signal_internal", "create_marketing_finding_internal", "create_proactive_recommendation_internal", "dismiss_recommendation"];
+    const rows = liveSql<{ proname: string; proconfig: string[] | null }>(
+      `select proname, proconfig from pg_proc where pronamespace='public'::regnamespace and proname = any(array['upsert_marketing_signal_internal','resolve_marketing_signal_internal','create_marketing_finding_internal','create_proactive_recommendation_internal','dismiss_recommendation']);`,
+    );
+    expect(rows).toHaveLength(fns.length);
+    for (const r of rows) {
+      expect((r.proconfig ?? []).some((c) => c.startsWith("search_path=")), `${r.proname} should pin search_path`).toBe(true);
+    }
+  });
+
+  it("the signal-detector cron job exists, is active, and embeds no literal JWT", () => {
+    const rows = liveSql<{ jobname: string; active: boolean; command: string }>(
+      "select jobname, active, command from cron.job where jobname='phase-p-signal-detector';",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].active).toBe(true);
+    expect(rows[0].command).not.toMatch(/eyJ[A-Za-z0-9_-]+\.eyJ/);
+  });
+
+  it("agents.reports_to gives every agent (except the CMO) a real superior — no flat list", () => {
+    const rows = liveSql<{ key: string; reports_to: string | null }>(
+      "select key, reports_to from public.agents where is_active = true;",
+    );
+    for (const r of rows) {
+      if (r.key === "cmo") expect(r.reports_to).toBeNull();
+      else expect(r.reports_to, `${r.key} should report to someone`).not.toBeNull();
+    }
+  });
+
+  it("meta_ads reports to performance (the Meta Ads Specialist sits under the Performance Marketing Lead, not the CMO directly)", () => {
+    const rows = liveSql<{ reports_to: string | null }>("select reports_to from public.agents where key='meta_ads';");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reports_to).toBe("performance");
+  });
+
+  it("ai_recommendations has a real owner-scoped SELECT policy — found live during Phase P audit: RLS was enabled with ZERO policies at all (deny-all for every authenticated caller), despite pre-existing code assuming one existed", () => {
+    const rows = liveSql<{ policyname: string; cmd: string }>(
+      "select policyname, cmd from pg_policies where schemaname='public' and tablename='ai_recommendations';",
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.cmd === "SELECT")).toBe(true);
+  });
+
+  it("ai_recommendations.status's REAL pre-existing CHECK constraint only allows 'active'|'dismissed'|'completed' — regression guard for a real bug found live during Phase P E2E testing: cmo-create-mission's first deploy tried status='converted' on Mission conversion and got a real 23514 constraint violation (silently swallowed — the recommendation card just never left the active feed). Fixed to use 'completed'; this guard fails loudly if the allowed set ever changes without that fix being revisited", () => {
+    const rows = liveSql<{ def: string }>(
+      `select pg_get_constraintdef(c.oid) as def from pg_constraint c
+       join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid = t.relnamespace
+       where t.relname = 'ai_recommendations' and n.nspname = 'public' and c.contype = 'c' and pg_get_constraintdef(c.oid) ilike '%status%';`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].def).toContain("'completed'");
+    expect(rows[0].def).not.toContain("'converted'");
+  });
+});

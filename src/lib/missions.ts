@@ -100,6 +100,13 @@ export interface Agent {
   department: string;
   role_summary: string;
   icon: string;
+  // Phase P — hierarchy/specialty (nullable: every pre-Phase-P row got
+  // reports_to backfilled by the migration, but capabilities/specialty are
+  // genuinely optional metadata, not every agent needs them populated).
+  reports_to: string | null;
+  specialty: string | null;
+  capabilities: string[];
+  knowledge_purpose: string | null;
 }
 
 // ── List ─────────────────────────────────────────────────────────────────
@@ -188,7 +195,10 @@ export function useAgentsQuery() {
     queryFn: async () => {
       const { data, error } = await supabase.from("agents").select("*").eq("is_active", true);
       if (error) throw new Error("Couldn't load the agent roster.");
-      return (data ?? []) as Agent[];
+      // capabilities is jsonb (Database type widens it to Json) — narrowing
+      // to string[] here, same "unless" as every other unknown-cast in this
+      // file (the migration seeds it as a JSON string array always).
+      return (data ?? []) as unknown as Agent[];
     },
     staleTime: 60 * 60_000, // reference data — changes only via migration
     gcTime: 24 * 60 * 60_000,
@@ -201,9 +211,16 @@ export function useCreateMissionMutation() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (objective: string) => {
+    // Accepts either a bare objective string (the original, still-used
+    // "New Mission" flow) or an object carrying a Phase P
+    // sourceRecommendationId — a "Start Mission" click on a Proposed
+    // Mission card. Either way this is the SAME real planning pipeline;
+    // Phase P adds lineage, not a second execution path.
+    mutationFn: async (input: string | { objective: string; sourceRecommendationId?: string }) => {
+      const objective = typeof input === "string" ? input : input.objective;
+      const sourceRecommendationId = typeof input === "string" ? undefined : input.sourceRecommendationId;
       const { data, error } = await supabase.functions.invoke("cmo-create-mission", {
-        body: { objective },
+        body: { objective, source_recommendation_id: sourceRecommendationId },
       });
       if (error)
         throw new Error(

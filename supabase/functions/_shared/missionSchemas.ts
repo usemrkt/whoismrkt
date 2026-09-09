@@ -72,3 +72,50 @@ export const OutreachCopyOutputSchema = z.object({
   message: longText(800),
 }).strict();
 export type OutreachCopyOutput = z.infer<typeof OutreachCopyOutputSchema>;
+
+// ── Phase P — Meta Ads Specialist's PREPARE-ONLY output (meta_prepare_campaign_plan) ──
+// Every field is planning/strategy text or small structured config — never a
+// real Meta object id, never an "executed"/"launched" flag. See
+// missionTools.ts's meta_prepare_campaign_plan entry and metaAdsTools.ts's
+// header for why this can never become a real API call from here.
+export const MetaCampaignPlanOutputSchema = z.object({
+  objective: shortText(200),
+  funnel_stage: z.enum(["acquisition", "retargeting", "retention"]),
+  campaign_structure: z.object({
+    campaign_name: shortText(120),
+    objective_type: shortText(80),
+    ad_sets: z.array(z.object({
+      name: shortText(100),
+      optimization_event: shortText(80),
+      budget_note: shortText(160),
+    }).strict()).min(1).max(6),
+  }).strict(),
+  audience_strategy: z.object({
+    approach: z.enum(["broad", "interest_based", "lookalike", "retargeting", "custom"]),
+    description: mediumText(400),
+    geography: shortText(160),
+    exclusions: z.array(shortText(120)).max(6).optional().default([]),
+  }).strict(),
+  budget_proposal: z.object({
+    daily_budget_usd_low: z.number().min(0).max(100000),
+    daily_budget_usd_high: z.number().min(0).max(100000),
+    rationale: mediumText(300),
+  }).strict(),
+  placements: z.object({
+    approach: z.enum(["advantage_plus", "manual"]),
+    surfaces: z.array(shortText(60)).min(1).max(8),
+    rationale: shortText(220),
+  }).strict(),
+  creative_requirements: z.array(shortText(220)).min(1).max(8),
+  copy_requirements: z.object({
+    hooks: z.array(shortText(160)).min(1).max(6),
+    primary_text_direction: mediumText(300),
+    cta_options: z.array(shortText(40)).min(1).max(5),
+  }).strict(),
+  test_matrix: z.array(z.object({
+    variable: shortText(80),
+    variants: z.array(shortText(120)).min(2).max(4),
+  }).strict()).min(1).max(5),
+  kpi_targets: z.array(z.object({ metric: shortText(40), target: shortText(80) }).strict()).min(1).max(6),
+}).strict();
+export type MetaCampaignPlanOutput = z.infer<typeof MetaCampaignPlanOutputSchema>;

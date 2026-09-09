@@ -118,6 +118,13 @@ export const ROUTES: Record<string, RouteConfig> = {
   mission_content_draft: { primary: "anthropic",  tier: "fast",     fallback: "openai",    maxTokens: 900,  temperature: 0.65 },
   mission_outreach_draft:{ primary: "anthropic",  tier: "fast",     fallback: "openai",    maxTokens: 500,  temperature: 0.65 },
 
+  // ── Phase P: the Meta Ads Specialist's prepare-only campaign plan is a
+  // richer structured output than any other mission tool (10 sub-sections),
+  // so it gets a larger token budget than the other mission_* routes above,
+  // still 'balanced' tier since it's decomposition against a known schema,
+  // not open-ended research.
+  mission_meta_campaign_plan: { primary: "anthropic", tier: "balanced", fallback: "openai", maxTokens: 2400, temperature: 0.45 },
+
   // ── Market Intelligence (Phase 5): retrieval → classification → synthesis.
   // Retrieval uses Anthropic's web search tool — no OpenAI fallback, since
   // OpenAI's equivalent requires the separate Responses API (a different

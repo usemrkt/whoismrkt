@@ -28,12 +28,17 @@ interface MissionRow {
 // Known, specific provider-failure signatures worth remembering as an
 // operational learning — deliberately narrow (a generic substring match
 // would create noise, not institutional knowledge).
-const KNOWN_ERROR_SIGNATURES: { match: string; label: string }[] = [
+// Exported: Phase P's mission_repeated_tool_failure signal detector
+// (signalDetectors.ts) reuses this exact vocabulary rather than defining a
+// second, possibly-drifting copy — same underlying data, two different
+// output artifacts (a Phase O institutional-memory candidate vs. a Phase P
+// operational signal/recommendation).
+export const KNOWN_ERROR_SIGNATURES: { match: string; label: string }[] = [
   { match: "credit balance is too low", label: "provider_billing_exhausted" },
   { match: "rate_limited", label: "provider_rate_limited" },
 ];
 
-function classifyError(message: string | null): string | null {
+export function classifyError(message: string | null): string | null {
   if (!message) return null;
   for (const sig of KNOWN_ERROR_SIGNATURES) {
     if (message.toLowerCase().includes(sig.match)) return sig.label;

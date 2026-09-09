@@ -52,6 +52,13 @@ describe("selectAndRankFacts — purpose-aware category filtering", () => {
     const cmoFacts = selectAndRankFacts(facts, "cmo").map((f) => f.id);
     expect(cmoFacts).toEqual(expect.arrayContaining(["1", "2", "3"]));
   });
+
+  it("Phase P: the Meta Ads Specialist gets its own dedicated purpose — brand/audience/products/competitors, not a bare alias for 'performance'", () => {
+    const metaFacts = selectAndRankFacts(facts, "meta_ads").map((f) => f.id);
+    expect(metaFacts).toEqual(expect.arrayContaining(["1", "2", "3"])); // audience, competitors, products
+    const perfFacts = selectAndRankFacts(facts, "performance").map((f) => f.id);
+    expect(perfFacts).not.toContain("3"); // 'performance' purpose has no 'products' — proves it's a genuinely different list, not the same array reused
+  });
 });
 
 describe("selectAndRankFacts — priority ordering (spec §11: constraints > canonical > verified > measured > historical > AI inference)", () => {

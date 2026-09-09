@@ -176,33 +176,53 @@ export type Database = {
       }
       agents: {
         Row: {
+          capabilities: Json
           created_at: string
           department: string
           icon: string
           is_active: boolean
           key: string
+          knowledge_purpose: string | null
           name: string
+          reports_to: string | null
           role_summary: string
+          specialty: string | null
         }
         Insert: {
+          capabilities?: Json
           created_at?: string
           department: string
           icon?: string
           is_active?: boolean
           key: string
+          knowledge_purpose?: string | null
           name: string
+          reports_to?: string | null
           role_summary: string
+          specialty?: string | null
         }
         Update: {
+          capabilities?: Json
           created_at?: string
           department?: string
           icon?: string
           is_active?: boolean
           key?: string
+          knowledge_purpose?: string | null
           name?: string
+          reports_to?: string | null
           role_summary?: string
+          specialty?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_reports_to_fkey"
+            columns: ["reports_to"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["key"]
+          },
+        ]
       }
       ai_chat_messages: {
         Row: {
@@ -278,14 +298,24 @@ export type Database = {
       ai_recommendations: {
         Row: {
           action: string | null
+          affected_objective: string | null
+          confidence: string | null
+          converted_to_mission_id: string | null
           created_at: string
+          dismissed_count: number
+          effort: string | null
+          estimated_cost_usd: number | null
           expires_at: string | null
           explanation: string | null
+          finding_id: string | null
           id: string
           is_done: boolean
           meta: Json | null
           priority: Database["public"]["Enums"]["recommendation_priority"]
+          proposed_mission: Json | null
           recommendation_type: string
+          risk: string | null
+          signal_id: string | null
           source: string | null
           status: string
           title: string
@@ -293,14 +323,24 @@ export type Database = {
         }
         Insert: {
           action?: string | null
+          affected_objective?: string | null
+          confidence?: string | null
+          converted_to_mission_id?: string | null
           created_at?: string
+          dismissed_count?: number
+          effort?: string | null
+          estimated_cost_usd?: number | null
           expires_at?: string | null
           explanation?: string | null
+          finding_id?: string | null
           id?: string
           is_done?: boolean
           meta?: Json | null
           priority?: Database["public"]["Enums"]["recommendation_priority"]
+          proposed_mission?: Json | null
           recommendation_type: string
+          risk?: string | null
+          signal_id?: string | null
           source?: string | null
           status?: string
           title: string
@@ -308,20 +348,52 @@ export type Database = {
         }
         Update: {
           action?: string | null
+          affected_objective?: string | null
+          confidence?: string | null
+          converted_to_mission_id?: string | null
           created_at?: string
+          dismissed_count?: number
+          effort?: string | null
+          estimated_cost_usd?: number | null
           expires_at?: string | null
           explanation?: string | null
+          finding_id?: string | null
           id?: string
           is_done?: boolean
           meta?: Json | null
           priority?: Database["public"]["Enums"]["recommendation_priority"]
+          proposed_mission?: Json | null
           recommendation_type?: string
+          risk?: string | null
+          signal_id?: string | null
           source?: string | null
           status?: string
           title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_recommendations_converted_to_mission_id_fkey"
+            columns: ["converted_to_mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_recommendations_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_recommendations_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_signals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_request_attempts: {
         Row: {
@@ -645,6 +717,7 @@ export type Database = {
           auto_execute_safe_tasks: boolean
           autonomy_level: number
           business_id: string
+          last_signal_scan_at: string | null
           max_auto_spend_usd_per_task: number
           proactive_missions_enabled: boolean
           updated_at: string
@@ -653,6 +726,7 @@ export type Database = {
           auto_execute_safe_tasks?: boolean
           autonomy_level?: number
           business_id: string
+          last_signal_scan_at?: string | null
           max_auto_spend_usd_per_task?: number
           proactive_missions_enabled?: boolean
           updated_at?: string
@@ -661,6 +735,7 @@ export type Database = {
           auto_execute_safe_tasks?: boolean
           autonomy_level?: number
           business_id?: string
+          last_signal_scan_at?: string | null
           max_auto_spend_usd_per_task?: number
           proactive_missions_enabled?: boolean
           updated_at?: string
@@ -2932,6 +3007,50 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_findings: {
+        Row: {
+          business_id: string
+          confidence: string
+          created_at: string
+          evidence: Json
+          id: string
+          interpretation_source: string
+          signal_id: string | null
+          summary: string
+          title: string
+        }
+        Insert: {
+          business_id: string
+          confidence: string
+          created_at?: string
+          evidence?: Json
+          id?: string
+          interpretation_source?: string
+          signal_id?: string | null
+          summary: string
+          title: string
+        }
+        Update: {
+          business_id?: string
+          confidence?: string
+          created_at?: string
+          evidence?: Json
+          id?: string
+          interpretation_source?: string
+          signal_id?: string | null
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_findings_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_health_snapshots: {
         Row: {
           business_id: string
@@ -2992,6 +3111,87 @@ export type Database = {
           provider?: string | null
           schema_version?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      marketing_signals: {
+        Row: {
+          affected_campaign_id: string | null
+          affected_channel: string | null
+          affected_objective: string | null
+          business_id: string
+          category: string
+          change_pct: number | null
+          confidence: string
+          cooldown_until: string | null
+          created_at: string
+          data_source: string
+          dedupe_key: string
+          detector_key: string
+          evidence: Json
+          first_detected_at: string
+          id: string
+          last_detected_at: string
+          metric_baseline: number | null
+          metric_current: number | null
+          metric_label: string | null
+          resolved_at: string | null
+          severity: string
+          status: string
+          updated_at: string
+          window_days: number | null
+        }
+        Insert: {
+          affected_campaign_id?: string | null
+          affected_channel?: string | null
+          affected_objective?: string | null
+          business_id: string
+          category: string
+          change_pct?: number | null
+          confidence: string
+          cooldown_until?: string | null
+          created_at?: string
+          data_source: string
+          dedupe_key: string
+          detector_key: string
+          evidence?: Json
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metric_baseline?: number | null
+          metric_current?: number | null
+          metric_label?: string | null
+          resolved_at?: string | null
+          severity: string
+          status?: string
+          updated_at?: string
+          window_days?: number | null
+        }
+        Update: {
+          affected_campaign_id?: string | null
+          affected_channel?: string | null
+          affected_objective?: string | null
+          business_id?: string
+          category?: string
+          change_pct?: number | null
+          confidence?: string
+          cooldown_until?: string | null
+          created_at?: string
+          data_source?: string
+          dedupe_key?: string
+          detector_key?: string
+          evidence?: Json
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metric_baseline?: number | null
+          metric_current?: number | null
+          metric_label?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          updated_at?: string
+          window_days?: number | null
         }
         Relationships: []
       }
@@ -3420,6 +3620,81 @@ export type Database = {
           },
         ]
       }
+      meta_campaign_plans: {
+        Row: {
+          audience_strategy: Json
+          budget_proposal: Json
+          business_id: string
+          campaign_structure: Json
+          copy_requirements: Json
+          created_at: string
+          creative_requirements: Json
+          funnel_stage: string
+          id: string
+          kpi_targets: Json
+          meta_connection_required: boolean
+          mission_id: string | null
+          objective: string
+          placements: Json
+          status: string
+          task_id: string | null
+          test_matrix: Json
+        }
+        Insert: {
+          audience_strategy?: Json
+          budget_proposal?: Json
+          business_id: string
+          campaign_structure?: Json
+          copy_requirements?: Json
+          created_at?: string
+          creative_requirements?: Json
+          funnel_stage: string
+          id?: string
+          kpi_targets?: Json
+          meta_connection_required?: boolean
+          mission_id?: string | null
+          objective: string
+          placements?: Json
+          status?: string
+          task_id?: string | null
+          test_matrix?: Json
+        }
+        Update: {
+          audience_strategy?: Json
+          budget_proposal?: Json
+          business_id?: string
+          campaign_structure?: Json
+          copy_requirements?: Json
+          created_at?: string
+          creative_requirements?: Json
+          funnel_stage?: string
+          id?: string
+          kpi_targets?: Json
+          meta_connection_required?: boolean
+          mission_id?: string | null
+          objective?: string
+          placements?: Json
+          status?: string
+          task_id?: string | null
+          test_matrix?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campaign_plans_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_campaign_plans_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "mission_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mission_approvals: {
         Row: {
           action_type: string
@@ -3666,6 +3941,7 @@ export type Database = {
           objective_summary: string | null
           plan_schema_version: number
           priority: string
+          source_recommendation_id: string | null
           status: string
           strategy_summary: string | null
           target_metrics: Json
@@ -3682,6 +3958,7 @@ export type Database = {
           objective_summary?: string | null
           plan_schema_version?: number
           priority?: string
+          source_recommendation_id?: string | null
           status?: string
           strategy_summary?: string | null
           target_metrics?: Json
@@ -3698,12 +3975,21 @@ export type Database = {
           objective_summary?: string | null
           plan_schema_version?: number
           priority?: string
+          source_recommendation_id?: string | null
           status?: string
           strategy_summary?: string | null
           target_metrics?: Json
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "missions_source_recommendation_id_fkey"
+            columns: ["source_recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_recommendations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_preferences: {
         Row: {
@@ -4942,6 +5228,18 @@ export type Database = {
           used: number
         }[]
       }
+      create_marketing_finding_internal: {
+        Args: {
+          p_business_id: string
+          p_confidence: string
+          p_evidence: Json
+          p_interpretation_source: string
+          p_signal_id: string
+          p_summary: string
+          p_title: string
+        }
+        Returns: string
+      }
       create_notification: {
         Args: {
           p_body?: string
@@ -4951,6 +5249,26 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      create_proactive_recommendation_internal: {
+        Args: {
+          p_action: string
+          p_affected_objective: string
+          p_business_id: string
+          p_confidence: string
+          p_effort: string
+          p_estimated_cost_usd: number
+          p_explanation: string
+          p_finding_id: string
+          p_priority: string
+          p_proposed_mission: Json
+          p_recommendation_type?: string
+          p_risk: string
+          p_signal_id: string
+          p_source?: string
+          p_title: string
+        }
+        Returns: string
       }
       decide_memory_candidate: {
         Args: { p_candidate_id: string; p_decision: string }
@@ -4967,6 +5285,10 @@ export type Database = {
       decline_contract: {
         Args: { p_contract_id: string; p_reason?: string }
         Returns: Json
+      }
+      dismiss_recommendation: {
+        Args: { p_recommendation_id: string }
+        Returns: undefined
       }
       find_or_create_conversation: {
         Args: { p_campaign_id?: string; p_other_user_id: string }
@@ -5101,6 +5423,10 @@ export type Database = {
           was_open: boolean
         }[]
       }
+      resolve_marketing_signal_internal: {
+        Args: { p_business_id: string; p_dedupe_key: string }
+        Returns: undefined
+      }
       search_creators: {
         Args: {
           p_categories?: string[]
@@ -5214,6 +5540,33 @@ export type Database = {
           incident_id: string
           is_new: boolean
           should_alert: boolean
+        }[]
+      }
+      upsert_marketing_signal_internal: {
+        Args: {
+          p_affected_campaign_id: string
+          p_affected_channel: string
+          p_affected_objective: string
+          p_business_id: string
+          p_category: string
+          p_change_pct: number
+          p_confidence: string
+          p_cooldown_hours?: number
+          p_data_source: string
+          p_dedupe_key: string
+          p_detector_key: string
+          p_evidence: Json
+          p_material_change_pct?: number
+          p_metric_baseline: number
+          p_metric_current: number
+          p_metric_label: string
+          p_severity: string
+          p_window_days: number
+        }
+        Returns: {
+          is_new: boolean
+          should_notify: boolean
+          signal_id: string
         }[]
       }
       users_have_relationship: {

@@ -30,6 +30,7 @@ import { checkAutomatedBudget } from "../_shared/metering.ts";
 import { parseStructuredResponse, logValidationFailure } from "../_shared/structuredParser.ts";
 import {
   StrategyOutputSchema, CampaignDraftOutputSchema, ContentIdeasOutputSchema, OutreachCopyOutputSchema,
+  MetaCampaignPlanOutputSchema,
 } from "../_shared/missionSchemas.ts";
 import { toolDef, type ToolName } from "../_shared/missionTools.ts";
 import { getBusinessBrainContext, formatBusinessBrainForPrompt } from "../_shared/businessBrain.ts";
@@ -220,12 +221,66 @@ Draft ONE short outreach message a business could send a matched creator — thi
   return { ...parsed.data, cost_usd: result.estimatedCostUsd };
 }
 
+// Phase P — the Meta Ads Specialist's genuine PREPARE-ONLY deliverable.
+// 'safe'/hasExecutor:true in missionTools.ts because this is exactly as
+// internal/reversible as execDraftCampaign above: one real database row,
+// zero external side effects, zero Meta account touched. The output is
+// never given a status other than 'prepared' — see the meta_campaign_plans
+// CHECK constraint, which makes "never claim launched" true at the schema
+// level, not merely a UI convention.
+async function execMetaPrepareCampaignPlan(supabase: SupabaseClient, task: MissionTaskRow) {
+  const [mission, brain] = await Promise.all([
+    missionObjective(supabase, task.mission_id),
+    getBusinessBrainContext(supabase, task.business_id, "meta_ads"),
+  ]);
+  const prompt = `Mission objective: ${wrapUntrustedBlock("objective", mission.objective)}
+
+${wrapUntrustedBlock("business_context", formatBusinessBrainForPrompt(brain))}
+
+This step: ${wrapUntrustedBlock("step_instructions", task.title)}${task.input_data && Object.keys(task.input_data).length ? `\nStep hints: ${wrapUntrustedBlock("step_input", JSON.stringify(task.input_data))}` : ""}
+
+You are the Meta Ads Specialist — an expert operator of Facebook and Instagram advertising. Produce a real, expert-level, PREPARE-ONLY campaign plan for this business. Respect every listed constraint exactly (especially budget limits and prohibited claims). No Meta account is connected — you are producing a plan a human will review and execute manually; never imply anything is live. Return ONLY:
+{
+  "objective": string,
+  "funnel_stage": "acquisition"|"retargeting"|"retention",
+  "campaign_structure": { "campaign_name": string, "objective_type": string, "ad_sets": [{ "name": string, "optimization_event": string, "budget_note": string }] (1-6) },
+  "audience_strategy": { "approach": "broad"|"interest_based"|"lookalike"|"retargeting"|"custom", "description": string, "geography": string, "exclusions": string[] (0-6) },
+  "budget_proposal": { "daily_budget_usd_low": number, "daily_budget_usd_high": number, "rationale": string },
+  "placements": { "approach": "advantage_plus"|"manual", "surfaces": string[] (1-8), "rationale": string },
+  "creative_requirements": string[] (1-8),
+  "copy_requirements": { "hooks": string[] (1-6), "primary_text_direction": string, "cta_options": string[] (1-5) },
+  "test_matrix": [{ "variable": string, "variants": string[] (2-4) }] (1-5),
+  "kpi_targets": [{ "metric": string, "target": string }] (1-6)
+}`;
+
+  const result = await callAI({ feature: "mission_meta_campaign_plan", messages: [{ role: "user", content: prompt }], systemPrompt: MISSION_PERSONA, userId: task.business_id, supabase });
+  const parsed = parseStructuredResponse(result.content, MetaCampaignPlanOutputSchema, "MetaCampaignPlan.v1");
+  if (!parsed.success) {
+    logValidationFailure({ feature: "mission_meta_campaign_plan", model: result.model, userId: task.business_id }, parsed);
+    throw new Error(`AI returned an invalid Meta campaign plan: ${parsed.issuesSummary}`);
+  }
+  const plan = parsed.data;
+
+  const { data: saved, error } = await supabase.from("meta_campaign_plans").insert({
+    business_id: task.business_id, mission_id: task.mission_id, task_id: task.id,
+    objective: plan.objective, funnel_stage: plan.funnel_stage,
+    campaign_structure: plan.campaign_structure, audience_strategy: plan.audience_strategy,
+    budget_proposal: plan.budget_proposal, placements: plan.placements,
+    creative_requirements: plan.creative_requirements, copy_requirements: plan.copy_requirements,
+    test_matrix: plan.test_matrix, kpi_targets: plan.kpi_targets,
+  }).select("id").single();
+  if (error) throw new Error(`Failed to save Meta campaign plan: ${error.message}`);
+
+  return { ...plan, meta_campaign_plan_id: saved.id, prepared: true, executed: false, cost_usd: result.estimatedCostUsd };
+}
+
 const SAFE_EXECUTORS: Record<string, (s: SupabaseClient, t: MissionTaskRow) => Promise<Record<string, unknown>>> = {
   gather_context: execGatherContext,
   build_strategy: execBuildStrategy,
   draft_campaign: execDraftCampaign,
   draft_content_ideas: execDraftContentIdeas,
   draft_outreach_copy: execDraftOutreachCopy,
+  meta_prepare_campaign_plan: execMetaPrepareCampaignPlan,
 };
 
 // If complete_mission_task's own RPC call fails to execute (network blip to

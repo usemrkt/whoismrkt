@@ -180,3 +180,37 @@ describe("Safe-tool output schemas — fail closed on malformed AI artifacts", (
     expect(CampaignDraftOutputSchema.safeParse(ok).success).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase P — Meta Ads Specialist hierarchy + PREPARE-ONLY invariant. Extends
+// (never replaces) the generic tool-registry invariants above, which already
+// cover meta_prepare_campaign_plan via TOOL_NAMES/SAFE_TOOL_NAMES iteration.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Phase P — specialist hierarchy + capability boundaries", () => {
+  it("meta_ads is a real, valid agent key the schema/planner can assign tasks to", () => {
+    expect(AGENT_KEYS).toContain("meta_ads");
+  });
+
+  it("meta_prepare_campaign_plan is owned by the Meta Ads Specialist, not the generic Performance agent", () => {
+    expect(TOOL_REGISTRY.meta_prepare_campaign_plan.agentKey).toBe("meta_ads");
+  });
+
+  it("meta_prepare_campaign_plan is 'safe'/hasExecutor:true — a real, internal, reversible deliverable", () => {
+    expect(TOOL_REGISTRY.meta_prepare_campaign_plan.riskLevel).toBe("safe");
+    expect(TOOL_REGISTRY.meta_prepare_campaign_plan.hasExecutor).toBe(true);
+  });
+
+  it("NO Meta write tool (create/update/pause/resume/etc.) exists anywhere in the real tool registry — spec §40", () => {
+    const writeToolNames = ["meta_create_campaign", "meta_create_adset", "meta_create_ad", "meta_update_budget", "meta_pause_entity", "meta_resume_entity", "meta_create_audience"];
+    for (const name of writeToolNames) {
+      expect(TOOL_NAMES as readonly string[]).not.toContain(name);
+    }
+  });
+
+  it("every future Meta write tool contract is documented as 'sensitive' — never 'safe' by design", async () => {
+    const { FUTURE_META_WRITE_TOOLS } = await import("../../supabase/functions/_shared/metaAdsTools.ts");
+    expect(FUTURE_META_WRITE_TOOLS.length).toBeGreaterThan(0);
+    for (const t of FUTURE_META_WRITE_TOOLS) expect(t.riskLevel).toBe("sensitive");
+  });
+});

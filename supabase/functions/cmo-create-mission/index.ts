@@ -80,10 +80,21 @@ Deno.serve(async (req: Request) => {
       || profile?.onboarding_path === "business_creator" || profile?.onboarding_path === "business_marketing";
     if (!isBusiness) return jsonErr("Missions are available for business accounts.", req, 403);
 
-    const body = await req.json().catch(() => ({})) as { objective?: string };
+    const body = await req.json().catch(() => ({})) as { objective?: string; source_recommendation_id?: string };
     const objective = sanitizeString(body.objective ?? "", 2000).trim();
     if (objective.length < 8) {
       return jsonErr("Describe the outcome you want in a bit more detail.", req, 400);
+    }
+
+    // Phase P — "Start Mission" from a Proposed Mission card passes this
+    // through. Ownership is verified before it's trusted for anything (a
+    // spoofed/foreign id here must never let this Mission masquerade as
+    // this business's own recommendation, or convert someone else's card).
+    let sourceRecommendationId: string | null = null;
+    if (typeof body.source_recommendation_id === "string" && body.source_recommendation_id) {
+      const { data: rec } = await serviceClient
+        .from("ai_recommendations").select("id").eq("id", body.source_recommendation_id).eq("user_id", user.id).maybeSingle();
+      if (rec) sourceRecommendationId = rec.id;
     }
 
     // Ensure an autonomy policy row exists (defaults: level 2, safe tasks
@@ -134,7 +145,7 @@ Return ONLY this JSON shape:
   ] (1-10 items, ordered so dependencies come before dependents)
 }
 
-Build a realistic sequence: gather_context and/or build_strategy first if useful, then concrete artifacts (draft_campaign, draft_content_ideas, draft_outreach_copy) that depend on the strategy step, and only include a PREPARE-ONLY tool (invite_creator_to_campaign, launch_campaign, request_paid_promotion) as a final step representing what the business owner will need to approve or do themselves — never as the only step.`;
+Build a realistic sequence: gather_context and/or build_strategy first if useful, then concrete artifacts (draft_campaign, draft_content_ideas, draft_outreach_copy, meta_prepare_campaign_plan) that depend on the strategy step, and only include a PREPARE-ONLY tool (invite_creator_to_campaign, launch_campaign, request_paid_promotion) as a final step representing what the business owner will need to approve or do themselves — never as the only step. If the objective is specifically about Facebook/Instagram/Meta advertising, delegate that work to agent_key "meta_ads" (the Meta Ads Specialist) using tool "meta_prepare_campaign_plan" — never use the generic "performance" agent for Meta-specific campaign planning.`;
 
     let aiResult;
     try {
@@ -171,6 +182,7 @@ Build a realistic sequence: gather_context and/or build_strategy first if useful
         strategy_summary: plan.strategy_summary,
         created_by: user.id,
         status: "planning",
+        source_recommendation_id: sourceRecommendationId,
       })
       .select()
       .single();
@@ -179,6 +191,24 @@ Build a realistic sequence: gather_context and/or build_strategy first if useful
       await refundCredits(serviceClient, user.id, CREDIT_COST);
       console.error("[cmo-create-mission] mission insert failed:", missionErr);
       return jsonErr("Couldn't save the Mission. Please try again.", req, 500);
+    }
+
+    // Best-effort lineage close-out — a failure here never invalidates the
+    // Mission itself (already created and valid); it just means the source
+    // recommendation card keeps showing as active instead of converted.
+    //
+    // status='completed' (NOT 'converted') — ai_recommendations' pre-existing
+    // CHECK constraint (from 20260615200000_launch_readiness.sql, predating
+    // Phase N/O/P) only allows 'active'|'dismissed'|'completed'. 'completed'
+    // is the right existing value here: this recommendation's job — becoming
+    // a Mission — is done. `converted_to_mission_id` (Phase P's own column)
+    // is what actually distinguishes "completed by conversion" from any
+    // other way a recommendation reaches 'completed'.
+    if (sourceRecommendationId) {
+      const { error: convertErr } = await serviceClient.from("ai_recommendations")
+        .update({ status: "completed", is_done: true, converted_to_mission_id: mission.id })
+        .eq("id", sourceRecommendationId).eq("user_id", user.id);
+      if (convertErr) console.error("[cmo-create-mission] recommendation conversion update failed:", convertErr);
     }
 
     const taskIds = plan.tasks.map(() => crypto.randomUUID());

@@ -24,6 +24,9 @@ import {
   Rocket,
   Loader2,
   Brain,
+  X,
+  Instagram,
+  Target,
 } from "lucide-react";
 import { C } from "@/lib/theme";
 import {
@@ -55,6 +58,13 @@ import {
   type Mission,
   type TaskStatus,
 } from "@/lib/missions";
+import {
+  useProactiveRecommendationsQuery,
+  useDismissRecommendationMutation,
+  PRIORITY_LABEL,
+  type ProactiveRecommendation,
+} from "@/lib/proactiveOps";
+import { useMetaCampaignPlansQuery } from "@/lib/metaAds";
 
 export const Route = createFileRoute("/_authenticated/marketing-hub/team")({
   errorComponent: ({ error, reset }) => <MarketingHubErrorFallback error={error} reset={reset} />,
@@ -420,8 +430,122 @@ function TeamSection() {
         </div>
       )}
 
+      <ProactiveFindingsPanel />
       <MissionsPanel />
       <BusinessBrainPanel />
+      <MetaAdsSpecialistPanel />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Proactive Findings (Phase P) — "your marketing team found N things", the
+// deliberately restrained entry point for the closed OBSERVE→...→LEARN loop.
+// Every card here is sourced from a REAL signal (marketing_signals →
+// marketing_findings → this recommendation) — never the pre-existing
+// AI-strategist weekly_priorities/opportunities cards from
+// marketing-hub-briefing, which stay exactly as they were. "Start Mission"
+// re-uses the exact same cmo-create-mission pipeline as the manual Missions
+// box below — Phase P proposes, Phase N still does all the executing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ProactiveFindingsPanel() {
+  const { data: recommendations, isPending } = useProactiveRecommendationsQuery();
+  const createMission = useCreateMissionMutation();
+  const dismiss = useDismissRecommendationMutation();
+  const [startingId, setStartingId] = useState<string | null>(null);
+
+  if (isPending) return null; // no flash-of-empty-state before the first real query resolves
+  const items = recommendations ?? [];
+  if (items.length === 0) return null; // nothing to proactively report — say nothing, don't manufacture a card
+
+  function handleStart(rec: ProactiveRecommendation) {
+    if (createMission.isPending) return;
+    setStartingId(rec.id);
+    const objective = rec.proposed_mission
+      ? `${rec.proposed_mission.why_now} ${rec.proposed_mission.proposed_response}`
+      : `${rec.title}. ${rec.explanation ?? ""}`;
+    createMission.mutate(
+      { objective: objective.slice(0, 2000), sourceRecommendationId: rec.id },
+      { onSettled: () => setStartingId(null) },
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 24, borderTop: `1px solid ${C.borderSubtle}` }}>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
+        Your marketing team found {items.length} thing{items.length === 1 ? "" : "s"}
+      </div>
+      <p style={{ fontSize: 12.5, color: C.textTertiary, margin: "0 0 14px", lineHeight: 1.55 }}>
+        Detected automatically from your real data — nothing here is fabricated. Start a Mission,
+        or dismiss it if it's not useful right now.
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {items.map((rec) => {
+          const { fg, bg, bdr } = priorityColors(rec.priority);
+          return (
+            <div
+              key={rec.id}
+              style={{
+                border: `1px solid ${bdr}`, borderRadius: 12, padding: 14, background: C.raised,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span
+                  style={{
+                    fontSize: 10.5, fontWeight: 800, color: fg, background: bg,
+                    border: `1px solid ${bdr}`, borderRadius: 6, padding: "2px 7px", textTransform: "uppercase",
+                  }}
+                >
+                  {PRIORITY_LABEL[rec.priority]}
+                </span>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary }}>{rec.title}</div>
+              </div>
+              {rec.explanation && (
+                <p style={{ fontSize: 12.5, color: C.textSecondary, lineHeight: 1.55, margin: "0 0 10px", whiteSpace: "pre-wrap" }}>
+                  {rec.explanation}
+                </p>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {rec.proposed_mission && (
+                  <button
+                    onClick={() => handleStart(rec)}
+                    disabled={createMission.isPending}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
+                      color: "white", background: C.aiBlue, border: "none", borderRadius: 8, padding: "7px 12px",
+                      cursor: createMission.isPending ? "default" : "pointer",
+                      opacity: createMission.isPending && startingId !== rec.id ? 0.6 : 1,
+                    }}
+                  >
+                    {createMission.isPending && startingId === rec.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Rocket size={12} />
+                    )}
+                    {createMission.isPending && startingId === rec.id ? "Starting…" : "Start Mission"}
+                  </button>
+                )}
+                {rec.action && !rec.proposed_mission && (
+                  <div style={{ fontSize: 12, color: C.textTertiary }}>{rec.action}</div>
+                )}
+                <button
+                  onClick={() => dismiss.mutate(rec.id)}
+                  disabled={dismiss.isPending}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600,
+                    color: C.textTertiary, background: "transparent", border: `1px solid ${C.borderSubtle}`,
+                    borderRadius: 8, padding: "7px 11px", cursor: dismiss.isPending ? "default" : "pointer",
+                  }}
+                >
+                  <X size={11} /> Dismiss
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1108,6 +1232,170 @@ function BusinessBrainPanel() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Meta Ads Specialist (Phase P) — the first-class specialist agent, not a
+// cosmetic persona. Genuinely PREPARE-ONLY (spec §20/§29/§30): every claim
+// here is either real roster/roster-adjacent data (agents table, Business
+// Brain facts, real meta_campaign_plans rows produced by real Mission
+// tasks) or an explicit, honest "not connected" statement — never a
+// fabricated "monitoring your Meta campaigns" line.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const META_ADS_RESPONSIBILITIES = [
+  "Meta campaign strategy (Facebook + Instagram)",
+  "Audience & placement planning",
+  "Creative & copy collaboration",
+  "Optimization reasoning",
+];
+
+const META_RELEVANT_CATEGORIES: FactCategory[] = ["brand", "audience", "products", "competitors", "marketing", "performance", "preference"];
+
+function MetaAdsSpecialistPanel() {
+  const { data: agents } = useAgentsQuery();
+  const { data: plans, isPending: plansLoading } = useMetaCampaignPlansQuery();
+  const { data: facts } = useBusinessFactsQuery();
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+
+  const agent = agents?.find((a) => a.key === "meta_ads");
+  const relevantFacts = (facts ?? []).filter((f) => META_RELEVANT_CATEGORIES.includes(f.category)).slice(0, 4);
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 24, borderTop: `1px solid ${C.borderSubtle}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <div
+          style={{
+            width: 30, height: 30, borderRadius: 9, display: "flex", alignItems: "center",
+            justifyContent: "center", background: C.accentMuted, border: `1px solid ${C.aiBlueBorder}`, flexShrink: 0,
+          }}
+        >
+          <Instagram size={15} color={C.aiBlue} />
+        </div>
+        <div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: C.textPrimary }}>Meta Ads Specialist</div>
+          <div style={{ fontSize: 11.5, color: C.textQuaternary }}>
+            {agent ? `Reports to ${agents?.find((a) => a.key === agent.reports_to)?.name ?? "Performance Marketing Lead"}` : "Ready"}
+          </div>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12.5, color: C.textTertiary, margin: "10px 0 14px", lineHeight: 1.55 }}>
+        {agent?.role_summary ??
+          "Owns Meta advertising (Facebook + Instagram) end-to-end: campaign strategy, audience/placement planning, creative and copy collaboration, and optimization reasoning."}
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+        {META_ADS_RESPONSIBILITIES.map((r) => (
+          <span
+            key={r}
+            style={{
+              fontSize: 11, fontWeight: 600, color: C.textSecondary, background: C.chromeMuted,
+              border: `1px solid ${C.borderSubtle}`, borderRadius: 7, padding: "4px 9px",
+            }}
+          >
+            {r}
+          </span>
+        ))}
+      </div>
+
+      {/* Connection — honest, never fabricated (spec §30). No connector exists
+          yet, so there is nothing to "connect" — no fake button. */}
+      <div
+        style={{
+          display: "flex", gap: 10, alignItems: "flex-start", padding: 12, borderRadius: 10,
+          background: C.amberMuted, border: `1px solid ${C.amberBorder}`, marginBottom: 18,
+        }}
+      >
+        <Lock size={14} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+        <p style={{ fontSize: 12, color: C.textSecondary, lineHeight: 1.55, margin: 0 }}>
+          Meta Ads is not connected. I can prepare campaign strategy and execution plans, but live
+          monitoring and campaign changes require a Meta connection.
+        </p>
+      </div>
+
+      {relevantFacts.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, marginBottom: 8 }}>
+            What I know about your business
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {relevantFacts.map((f) => (
+              <div key={f.id} style={{ fontSize: 12, color: C.textTertiary, lineHeight: 1.5 }}>
+                <span style={{ color: confidenceColor(f.confidence) }}>●</span> {f.statement}{" "}
+                <span style={{ color: C.textQuaternary }}>[{SOURCE_LABEL[f.source_type]}]</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.textSecondary, marginBottom: 8 }}>
+          Prepared campaign plans
+        </div>
+        {plansLoading && <div style={{ fontSize: 12, color: C.textQuaternary }}>Loading…</div>}
+        {!plansLoading && (plans ?? []).length === 0 && (
+          <div style={{ fontSize: 12, color: C.textQuaternary }}>
+            No Meta campaign plans yet — start a Mission about Facebook/Instagram advertising and
+            I'll prepare one.
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(plans ?? []).map((p) => {
+            const isOpen = expandedPlan === p.id;
+            return (
+              <div key={p.id} style={{ border: `1px solid ${C.borderSubtle}`, borderRadius: 10, overflow: "hidden" }}>
+                <button
+                  onClick={() => setExpandedPlan(isOpen ? null : p.id)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 8, padding: "10px 12px", background: C.raised, border: "none", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <Target size={13} color={C.aiBlue} style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: C.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.campaign_structure.campaign_name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberMuted,
+                        border: `1px solid ${C.amberBorder}`, borderRadius: 6, padding: "1px 6px", flexShrink: 0,
+                      }}
+                    >
+                      Prepared — Meta connection required
+                    </span>
+                  </div>
+                  {isOpen ? <ChevronDown size={14} color={C.textQuaternary} /> : <ChevronRight size={14} color={C.textQuaternary} />}
+                </button>
+                {isOpen && (
+                  <div style={{ padding: "12px 14px", fontSize: 12, color: C.textSecondary, lineHeight: 1.6 }}>
+                    <div style={{ marginBottom: 8 }}><strong>Objective:</strong> {p.objective} ({p.funnel_stage})</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Audience:</strong> {p.audience_strategy.approach} — {p.audience_strategy.description}
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Budget:</strong> ${p.budget_proposal.daily_budget_usd_low}–${p.budget_proposal.daily_budget_usd_high}/day — {p.budget_proposal.rationale}
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Placements:</strong> {p.placements.surfaces.join(", ")}
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Creative needed:</strong> {p.creative_requirements.join("; ")}
+                    </div>
+                    <div>
+                      <strong>KPI targets:</strong> {p.kpi_targets.map((k) => `${k.metric}: ${k.target}`).join(", ")}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

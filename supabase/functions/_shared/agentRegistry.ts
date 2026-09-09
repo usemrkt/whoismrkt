@@ -1,16 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MRKT Agent Registry (Phase N) — static roster shared by the CMO planner and
-// the mission task runner. The source of truth for *display* data (name,
-// icon, department) is the `agents` table (seeded once in the Phase N
-// migration); this file exists only so schema validation (missionSchemas.ts)
-// and the tool registry (missionTools.ts) have a compile-time-checked list
-// of valid keys without a DB round-trip on every request. Keep in sync with
-// the migration's seed INSERT if a role is ever added or renamed.
+// MRKT Agent Registry (Phase N, extended Phase P) — static roster shared by
+// the CMO planner and the mission task runner. The source of truth for
+// *display* data (name, icon, department, reports_to, specialty) is the
+// `agents` table (seeded in the Phase N migration, extended in the Phase P
+// one); this file exists only so schema validation (missionSchemas.ts) and
+// the tool registry (missionTools.ts) have a compile-time-checked list of
+// valid keys without a DB round-trip on every request. Keep in sync with the
+// migrations' seed INSERT/UPDATE if a role is ever added or renamed.
+//
+// Phase P adds "meta_ads" — the first-class Meta Ads Specialist, reporting
+// to "performance" (now displayed as "Performance Marketing Lead"). This is
+// the first agent whose reports_to is another agent rather than the CMO
+// directly — see the migration's hierarchy UPDATE.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const AGENT_KEYS = [
   "cmo", "growth", "content", "social", "creative", "copy",
-  "performance", "intelligence", "lifecycle", "analyst",
+  "performance", "intelligence", "lifecycle", "analyst", "meta_ads",
 ] as const;
 
 export type AgentKey = typeof AGENT_KEYS[number];
